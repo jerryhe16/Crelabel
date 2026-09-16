@@ -2,12 +2,12 @@
 
 更新日期：2026-09-16  
 当前源码版本：0.8.14  
-当前负责人：Grok  
-发布状态：`安装包已构建`（用户要求合并并发布 0.8.14）；**不是** `已发布`（未上传飞书、未配置 GitHub 远程）。长规格换行、统一字号、对齐修复已进入主线。
+当前负责人：无  
+发布状态：`安装包已构建`（0.8.14，用户要求合并并打包装）；**不是** `已发布`（未上传飞书、未配置 GitHub 远程）。长规格换行、统一字号、对齐修复已进入 `main`。
 
-当前工作：Grok / 合并 `grok/unified-text-wrap-align` 并构建 `Crelabel-Setup-v0.8.14.exe`。
+当前工作：无。下一项功能开始前必须在此登记负责人、目标、分支和预计修改文件。
 
-Git 状态：本地仓库，默认分支 `main`。未配置远程仓库。
+Git 状态：本地仓库，默认分支 `main` @ `22c443f` 及本条文档提交。未配置远程仓库。
 
 ## 当前结论
 
@@ -32,14 +32,14 @@ Git 状态：本地仓库，默认分支 `main`。未配置远程仓库。
 
 用户决定：当前已验证版本可以成为主线；「质检留样」保持现状；后续只要 Codex 与 Grok 能共同开发即可。GitHub 上传由用户稍后安排，不在本次执行。
 
-已存在的 0.8.13 本地安装包（构建产物，不入库）：
+当前本地安装包（构建产物，不入库）：
 
-- `release/Crelabel-Setup-v0.8.13.exe`
-- 大小：66,908,234 bytes
-- SHA256：`639DD7CC0284756717F29861EB3FB9C3B64C4A5203FEEA505D9EDA92A68F2208`
-- 便携目录：`release/Crelabel_v0.8.13/Crelabel.exe`（`--self-test` 退出码 0）
+- `release/Crelabel-Setup-v0.8.14.exe`
+- 大小：66,913,356 bytes
+- SHA256：`5E0BBC89DAF359616A99C3F7DE7291909ABDB012596469C0E9A32D1DE2202FD2`
+- 便携目录：`release/Crelabel_v0.8.14/Crelabel.exe`（`--self-test` 退出码 0）
 
-历史安装包 `release/Crelabel-Setup-v0.8.12.exe` 仍可留在本地，不再作为开发基线。
+历史安装包 `release/Crelabel-Setup-v0.8.13.exe` 仍可留在本地，不再作为开发基线。
 
 ## 2026-09-16 接管核验（历史，Codex 当时针对 0.8.12 源码/包）
 
@@ -68,9 +68,10 @@ python tools\verify_machine_ui.py
 ### 2026-09-16 / Grok / 发布 0.8.14 安装包
 
 - 目标：用户要求合并 `grok/unified-text-wrap-align` 并发布安装包。
-- 修改：版本号同步为 0.8.14（`crelabel.py`、`build.ps1`、`Crelabel.iss`、`Crelabel-Quick-Guide.txt`、`README.md`、`HANDOFF.md`）。
-- 验证与产物：见本条下方构建完成后的记录。
-- 发布：本地安装包；未上传飞书、未推送 GitHub。
+- 修改：版本号同步为 0.8.14（`crelabel.py`、`build.ps1`、`Crelabel.iss`、`Crelabel-Quick-Guide.txt`、`README.md`、`HANDOFF.md`）。`main` 已快进包含 `3d8760b` 与 `22c443f`。
+- 验证：`py_compile` 通过；`verify_crelabel.py` 核心回归通过（飞书缓存 115 条附加断言仍 skipped）；`verify_machine_ui.py` 通过；打包程序 `--self-test` 退出码 0。
+- 产物：`release/Crelabel-Setup-v0.8.14.exe`（66,913,356 bytes，SHA256 `5E0BBC89DAF359616A99C3F7DE7291909ABDB012596469C0E9A32D1DE2202FD2`）。
+- 发布：仅本地安装包；未上传飞书、未推送 GitHub。安装前请先关闭正在运行的 `C:\Program Files\Crelabel\Crelabel.exe`。
 
 ### 2026-09-16 / Grok / 统一字号、换行与对齐
 
