@@ -259,6 +259,38 @@ def fit_text(draw: ImageDraw.ImageDraw, text: str, max_width: int, start_size: i
     return get_font(min_size, bold, text)
 
 
+def explicit_break_parts(text: str) -> list[str]:
+    """Split on real newlines and the two-character \\n typed in custom fields."""
+    normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n").replace("\\n", "\n")
+    return normalized.split("\n")
+
+
+def wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    """Wrap a single paragraph to max_width without shrinking the font."""
+    if text == "":
+        return [""]
+    lines: list[str] = []
+    current = ""
+    for char in text:
+        trial = current + char
+        box = draw.textbbox((0, 0), trial, font=font)
+        if current and (box[2] - box[0]) > max_width:
+            lines.append(current)
+            current = "" if char.isspace() else char
+        else:
+            current = trial
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def field_display_rows(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    rows: list[str] = []
+    for part in explicit_break_parts(text):
+        rows.extend(wrap_text(draw, part, font, max_width))
+    return rows or [text or ""]
+
+
 def format_label_value(header: str, value: str) -> str:
     """Print field content only. 左右手 becomes L/R; no column titles on the label."""
     raw = clean(value)
@@ -267,13 +299,16 @@ def format_label_value(header: str, value: str) -> str:
     return raw
 
 
-def _line_scale(layout: LabelLayout, index: int) -> float:
+def _unified_text_scale(layout: LabelLayout) -> float:
+    percent = layout.text_scale_percent or 100
     scales = layout.line_scale_percent or ()
-    if index < len(scales):
-        return max(0.5, min(2.2, scales[index] / 100))
-    if index == 0:
-        return max(0.7, min(1.4, layout.text_scale_percent / 100))
-    return 1.0
+    if percent == 100 and scales:
+        percent = scales[0]
+    return max(0.5, min(2.2, percent / 100))
+
+
+def _line_scale(layout: LabelLayout, index: int) -> float:
+    return _unified_text_scale(layout)
 
 
 def _line_offset_mm(layout: LabelLayout, index: int) -> tuple[float, float]:
@@ -406,37 +441,30 @@ def _render_label_with_regions(
         graphic_reserve = max(graphic_reserve, round(max(4.0, min(14.0, layout.barcode_height_mm)) * dpm))
     if graphic_reserve:
         graphic_reserve += max(2, round(0.3 * dpm))
-    logo_reserve = (logo_image.height + max(2, round(0.25 * dpm))) if logo_image else 0
-    text_budget = max(18, height - 2 * margin - graphic_reserve - logo_reserve)
-    row_budget = max(10, text_budget // max(1, len(lines)))
-    prepared_lines: list[tuple[str, str, ImageFont.FreeTypeFont, int, int]] = []
-    for index, (header, value) in enumerate(lines):
+    scale = _unified_text_scale(layout)
+    font_size = max(8, round((2.6 if compact else 3.4) * dpm * scale))
+    sample_font = get_font(font_size, False, "字")
+    sample_box = draw.textbbox((0, 0), "字", font=sample_font)
+    if sample_box[2] - sample_box[0] > content_width:
+        sample_font = fit_text(draw, "字", content_width, font_size, 8, False)
+        font_size = int(getattr(sample_font, "size", font_size) or font_size)
+
+    prepared_fields: list[tuple[str, list[tuple[str, int, int]], object, int]] = []
+    for header, value in lines:
         text = value
-        scale = _line_scale(layout, index)
-        start = min(round((2.6 if compact else 3.4) * dpm * scale), round(row_budget * 0.92))
-        minimum = max(8, round((1.15 if compact else 1.4) * dpm * min(scale, 1.0)))
-        font = fit_text(draw, text, content_width, start, minimum, False)
-        box = draw.textbbox((0, 0), text, font=font)
-        prepared_lines.append((header, text, font, box[2] - box[0], box[3] - box[1]))
+        font = get_font(font_size, False, text)
+        rows = field_display_rows(draw, text, font, content_width)
+        measured: list[tuple[str, int, int]] = []
+        for row_text in rows:
+            box = draw.textbbox((0, 0), row_text or " ", font=font)
+            measured.append((row_text, box[2] - box[0] if row_text else 0, box[3] - box[1]))
+        line_height = max((item[2] for item in measured), default=font_size)
+        prepared_fields.append((header, measured, font, line_height))
 
-    def is_hand_item(item: tuple) -> bool:
-        return item[1] in {"L", "R"} or item[0] in {"左右手", "手性", "L/R", "LR"}
-
-    pair_index = 0
-    while pair_index < len(prepared_lines) - 1:
-        if is_hand_item(prepared_lines[pair_index + 1]):
-            header, text, _font, width0, height0 = prepared_lines[pair_index]
-            _header2, _text2, _font2, width1, _height1 = prepared_lines[pair_index + 1]
-            gap = max(6, round(0.8 * dpm))
-            allowed = content_width - gap - width1
-            if width0 > allowed > 20:
-                scale = _line_scale(layout, pair_index)
-                font = fit_text(draw, text, allowed, round(3.4 * dpm * scale), max(9, round(1.4 * dpm)), False)
-                box = draw.textbbox((0, 0), text, font=font)
-                prepared_lines[pair_index] = (header, text, font, box[2] - box[0], box[3] - box[1])
-            pair_index += 2
-        else:
-            pair_index += 1
+    def is_hand_field(item: tuple) -> bool:
+        header, rows, _font, _height = item
+        first = rows[0][0] if rows else ""
+        return first in {"L", "R"} or header in {"左右手", "手性", "L/R", "LR"}
 
     def aligned_x(block_width: int) -> int:
         if alignment == "left":
@@ -453,18 +481,41 @@ def _render_label_with_regions(
             y = round(abs_pos[name][1] * dpm)
         else:
             x, y = default_x, default_y
-        x = max(margin, min(width - margin - box_w, x))
-        y = max(2, min(height - margin - box_h, y))
+        x = max(margin, min(width - margin - max(1, box_w), x))
+        y = max(2, min(height - margin - max(1, box_h), y))
         return x, y
 
-    def place_item(index: int, text: str, font, text_width: int, line_height: int, x: int, y: int) -> tuple[int, int, int, int]:
-        extra_x, extra_y = _line_offset_mm(layout, index)
-        default_x = x + offset_x + round(extra_x * dpm)
-        default_y = y + round(extra_y * dpm)
-        x, y = placed_xy(f"text_{index}", default_x, default_y, text_width, line_height)
-        box = draw.textbbox((0, 0), text, font=font)
+    def draw_row(text: str, font, x: int, y: int) -> None:
+        box = draw.textbbox((0, 0), text or " ", font=font)
         draw.text((x - box[0], y - box[1]), text, font=font, fill=0)
-        bound = (x, y, x + text_width, y + line_height)
+
+    def place_field(index: int, rows: list[tuple[str, int, int]], font, start_x: int | None, start_y: int) -> tuple[int, int, int, int]:
+        extra_x, extra_y = _line_offset_mm(layout, index)
+        pieces: list[tuple[str, int, int, int, int]] = []
+        y = start_y + round(extra_y * dpm)
+        for row_text, tw, th in rows:
+            x = (start_x if start_x is not None else aligned_x(max(tw, 1))) + offset_x + round(extra_x * dpm)
+            pieces.append((row_text, x, y, tw, th))
+            y += th + text_spacing
+        origin_x, origin_y = pieces[0][1], pieces[0][2]
+        pinned_x, pinned_y = placed_xy(
+            f"text_{index}", origin_x, origin_y,
+            max(item[3] for item in pieces),
+            max(1, pieces[-1][2] + pieces[-1][4] - origin_y),
+        )
+        dx, dy = pinned_x - origin_x, pinned_y - origin_y
+        xs: list[int] = []
+        ys: list[int] = []
+        bottoms: list[int] = []
+        rights: list[int] = []
+        for row_text, x, row_y, tw, th in pieces:
+            x, row_y = x + dx, row_y + dy
+            draw_row(row_text, font, x, row_y)
+            xs.append(x)
+            ys.append(row_y)
+            rights.append(x + max(tw, 1))
+            bottoms.append(row_y + th)
+        bound = (min(xs), min(ys), max(rights), max(bottoms))
         regions[f"text_{index}"] = bound
         return bound
 
@@ -474,27 +525,31 @@ def _render_label_with_regions(
     regions = {}
     last_text_bottom = margin
     index = 0
-    while index < len(prepared_lines):
-        header, text, font, text_width, line_height = prepared_lines[index]
+    while index < len(prepared_fields):
+        header, rows, font, line_height = prepared_fields[index]
         companion = (
-            index + 1 < len(prepared_lines)
-            and is_hand_item(prepared_lines[index + 1])
+            index + 1 < len(prepared_fields)
+            and is_hand_field(prepared_fields[index + 1])
+            and len(rows) == 1
+            and len(prepared_fields[index + 1][1]) == 1
             and f"text_{index}" not in abs_pos
             and f"text_{index + 1}" not in abs_pos
         )
         if companion:
-            header2, text2, font2, width2, height2 = prepared_lines[index + 1]
+            _header2, rows2, font2, height2 = prepared_fields[index + 1]
+            text_width = rows[0][1]
+            width2 = rows2[0][1]
             gap = max(6, round(0.8 * dpm))
             group_width = text_width + gap + width2
             group_height = max(line_height, height2)
             group_x = aligned_x(group_width)
-            bound = place_item(index, text, font, text_width, line_height, group_x, cursor_y + (group_height - line_height) // 2)
-            bound2 = place_item(index + 1, text2, font2, width2, height2, group_x + text_width + gap, cursor_y + (group_height - height2) // 2)
+            bound = place_field(index, rows, font, group_x, cursor_y + (group_height - line_height) // 2)
+            bound2 = place_field(index + 1, rows2, font2, group_x + text_width + gap, cursor_y + (group_height - height2) // 2)
             last_text_bottom = max(last_text_bottom, bound[3], bound2[3])
             cursor_y = last_text_bottom + text_spacing
             index += 2
             continue
-        bound = place_item(index, text, font, text_width, line_height, aligned_x(text_width), cursor_y)
+        bound = place_field(index, rows, font, None, cursor_y)
         last_text_bottom = max(last_text_bottom, bound[3])
         cursor_y = bound[3] + text_spacing
         index += 1

@@ -698,7 +698,7 @@ class CrelabelWindow(QMainWindow):
             "layout": {
                 "offset_x_mm": self.offset_x_step.value(),
                 "offset_y_mm": self.offset_y_step.value(),
-                "text_scale_percent": int(self.line_scales[0]),
+                "text_scale_percent": int(self.text_scale_step.value()),
                 "text_spacing_mm": self.text_spacing_step.value(),
                 "barcode_height_mm": self.barcode_height_step.value(),
                 "barcode_width_percent": int(self.barcode_width_step.value()),
@@ -1006,7 +1006,7 @@ class CrelabelWindow(QMainWindow):
         reset_layout.clicked.connect(self.reset_label_layout)
         layout_title_row.addWidget(reset_layout)
         layout_layout.addLayout(layout_title_row)
-        layout_hint = QLabel("编号和 L/R 可单独拖动缩放。排好后点“保存模板”并命名，之后可从下拉框切换，例如 40×30 默认和 30×20 紧凑。")
+        layout_hint = QLabel("文字大小统一调整；过长内容按当前字号换行，自定义文字可用 \\n 手动换行。对齐会立刻重排文字，不需要单独拖开。")
         layout_hint.setObjectName("Hint")
         layout_hint.setWordWrap(True)
         layout_layout.addWidget(layout_hint)
@@ -1021,17 +1021,12 @@ class CrelabelWindow(QMainWindow):
         layout_grid.addWidget(QLabel("整体上下"), 0, 2)
         self.offset_y_step = NumberStepper(-4, 4, 0.5, 0, 1, " mm")
         layout_grid.addWidget(self.offset_y_step, 0, 3)
-        self.text_items_host = QWidget()
-        self.text_items_box = QVBoxLayout(self.text_items_host)
-        self.text_items_box.setContentsMargins(0, 0, 0, 0)
-        self.text_items_box.setSpacing(8)
         self.line_scale_steppers: list[NumberStepper] = []
         self._text_control_signature: tuple = ()
-        empty_items = QLabel("选择标签内容后，这里会单独列出每一项文字的大小，例如编号和 L/R。")
-        empty_items.setObjectName("Hint")
-        empty_items.setWordWrap(True)
-        self.text_items_box.addWidget(empty_items)
-        layout_grid.addWidget(self.text_items_host, 1, 0, 1, 4)
+        layout_grid.addWidget(QLabel("文字大小"), 1, 0)
+        self.text_scale_step = NumberStepper(50, 220, 5, 100, 0, " %")
+        self.text_scale_step.setToolTip("所有文字共用一个字号。内容过长时换行，不再把单行字缩小。")
+        layout_grid.addWidget(self.text_scale_step, 1, 1, 1, 3)
         layout_grid.addWidget(QLabel("文字间距"), 2, 0)
         self.text_spacing_step = NumberStepper(0, 0.8, 0.1, 0.2, 1, " mm")
         self.text_spacing_step.setToolTip("未单独拖开时，控制上下两行之间的默认距离")
@@ -1056,8 +1051,6 @@ class CrelabelWindow(QMainWindow):
         self.logo_size_step = NumberStepper(LOGO_WIDTH_MIN_MM, LOGO_WIDTH_MAX_MM, 0.5, 10.0, 1, " mm")
         self.logo_size_step.setToolTip("按宽度缩放内置 Logo，高度按原图比例")
         layout_grid.addWidget(self.logo_size_step, 4, 1, 1, 3)
-        self.text_scale_step = NumberStepper(50, 220, 5, 100, 0, " %")
-        self.text_scale_step.hide()
         layout_layout.addLayout(layout_grid)
 
         # Element-specific geometry is edited directly in the preview. These
@@ -1083,7 +1076,7 @@ class CrelabelWindow(QMainWindow):
         self.logo_size_label.setEnabled(False)
         self.text_scale_step.valueChanged.connect(self.on_text_scale_changed)
         self.barcode_scale_step.valueChanged.connect(self.sync_barcode_scale)
-        self.text_alignment_combo.currentIndexChanged.connect(self.update_preview)
+        self.text_alignment_combo.currentIndexChanged.connect(self.on_text_alignment_changed)
         right_layout.addWidget(layout_card)
         right_layout.addWidget(settings_card)
 
@@ -1188,12 +1181,13 @@ class CrelabelWindow(QMainWindow):
         saved_scales = saved_layout.get("line_scale_percent") or [saved_layout.get("text_scale_percent", 100)]
         saved_xs = saved_layout.get("line_offset_x_mm") or [saved_layout.get("text_offset_x_mm", 0)]
         saved_ys = saved_layout.get("line_offset_y_mm") or [saved_layout.get("text_offset_y_mm", 0)]
+        unified = int(saved_layout.get("text_scale_percent", saved_scales[0] if saved_scales else 100))
         for index in range(MAX_TEXT_LINES):
-            self.line_scales[index] = int(saved_scales[index]) if index < len(saved_scales) else 100
+            self.line_scales[index] = unified
             self.line_x[index] = float(saved_xs[index]) if index < len(saved_xs) else 0.0
             self.line_y[index] = float(saved_ys[index]) if index < len(saved_ys) else 0.0
         self.text_scale_step.blockSignals(True)
-        self.text_scale_step.setValue(self.line_scales[0])
+        self.text_scale_step.setValue(unified)
         self.text_scale_step.blockSignals(False)
         self.text_x_step.setValue(self.line_x[0])
         self.text_y_step.setValue(self.line_y[0])
@@ -1207,7 +1201,9 @@ class CrelabelWindow(QMainWindow):
         self.element_abs = self._parse_element_abs(saved_layout.get("element_abs_mm", []))
         self._apply_type_logo_default(self.label_type.currentIndex())
         alignment_index = self.text_alignment_combo.findData(saved_layout.get("text_alignment", "center"))
+        self.text_alignment_combo.blockSignals(True)
         self.text_alignment_combo.setCurrentIndex(alignment_index if alignment_index >= 0 else 1)
+        self.text_alignment_combo.blockSignals(False)
         self.update_date_controls()
         self.sync_preset_to_size()
         self._refresh_template_combo()
@@ -1583,7 +1579,7 @@ class CrelabelWindow(QMainWindow):
             niimbot_mode=("qr" if self.label_type.currentIndex() == 1 else (self.niimbot_symbol.currentData() or "none")) if self.is_niimbot() else "",
             offset_x_mm=self.offset_x_step.value(),
             offset_y_mm=self.offset_y_step.value(),
-            text_scale_percent=int(self.line_scales[0]),
+            text_scale_percent=int(self.text_scale_step.value()),
             text_spacing_mm=self.text_spacing_step.value(),
             barcode_height_mm=self.barcode_height_step.value(),
             barcode_width_percent=int(self.barcode_width_step.value()),
@@ -1595,7 +1591,7 @@ class CrelabelWindow(QMainWindow):
             qr_offset_x_mm=self.qr_x_step.value(),
             qr_offset_y_mm=self.qr_y_step.value(),
             text_alignment=self.text_alignment_combo.currentData() or "center",
-            line_scale_percent=tuple(int(value) for value in self.line_scales),
+            line_scale_percent=tuple(int(self.text_scale_step.value()) for _ in self.line_scales),
             line_offset_x_mm=tuple(float(value) for value in self.line_x),
             line_offset_y_mm=tuple(float(value) for value in self.line_y),
             show_logo=self.logo_check.isChecked(),
@@ -1722,7 +1718,7 @@ class CrelabelWindow(QMainWindow):
         return {
             "width_mm": self.width_spin.value(),
             "height_mm": self.height_spin.value(),
-            "line_scales": self.line_scales[:],
+            "line_scales": [int(self.text_scale_step.value())] * MAX_TEXT_LINES,
             "line_x": self.line_x[:],
             "line_y": self.line_y[:],
             "show_logo": self.logo_check.isChecked(),
@@ -1887,10 +1883,14 @@ class CrelabelWindow(QMainWindow):
         scales = saved.get("line_scales") or layout.get("line_scale_percent") or []
         xs = saved.get("line_x") or layout.get("line_offset_x_mm") or []
         ys = saved.get("line_y") or layout.get("line_offset_y_mm") or []
+        unified = int(layout.get("text_scale_percent", scales[0] if scales else 100))
         for index in range(MAX_TEXT_LINES):
-            self.line_scales[index] = int(scales[index]) if index < len(scales) else 100
+            self.line_scales[index] = unified
             self.line_x[index] = float(xs[index]) if index < len(xs) else 0.0
             self.line_y[index] = float(ys[index]) if index < len(ys) else 0.0
+        self.text_scale_step.blockSignals(True)
+        self.text_scale_step.setValue(unified)
+        self.text_scale_step.blockSignals(False)
         self.offset_x_step.setValue(float(layout.get("offset_x_mm", 0)))
         self.offset_y_step.setValue(float(layout.get("offset_y_mm", 0)))
         self.text_spacing_step.setValue(float(layout.get("text_spacing_mm", 0.2)))
@@ -1906,7 +1906,9 @@ class CrelabelWindow(QMainWindow):
         self.logo_x_step.setValue(float(layout.get("logo_offset_x_mm", 0)))
         self.logo_y_step.setValue(float(layout.get("logo_offset_y_mm", 0)))
         alignment_index = self.text_alignment_combo.findData(layout.get("text_alignment", "center"))
+        self.text_alignment_combo.blockSignals(True)
         self.text_alignment_combo.setCurrentIndex(alignment_index if alignment_index >= 0 else 1)
+        self.text_alignment_combo.blockSignals(False)
         if "show_logo" in saved:
             self.logo_check.blockSignals(True)
             self.logo_check.setChecked(bool(saved["show_logo"]))
@@ -1953,7 +1955,9 @@ class CrelabelWindow(QMainWindow):
         self.sync_barcode_scale(defaults["barcode_scale"])
         self.qr_size_step.setValue(defaults["qr_size_mm"])
         self.logo_size_step.setValue(defaults["logo_width_mm"])
+        self.text_alignment_combo.blockSignals(True)
         self.text_alignment_combo.setCurrentIndex(1)
+        self.text_alignment_combo.blockSignals(False)
         for widget in (
             self.text_x_step, self.text_y_step, self.barcode_x_step,
             self.barcode_y_step, self.qr_x_step, self.qr_y_step,
@@ -1999,12 +2003,6 @@ class CrelabelWindow(QMainWindow):
         selected = self.preview_element_combo.currentData()
         if selected:
             self.preview.set_selected_element(selected)
-        signature = tuple((header, f"text_{index}") for index, (header, _value) in enumerate(columns) if f"text_{index}" in regions)
-        if signature != self._text_control_signature:
-            self._text_control_signature = signature
-            self._rebuild_text_item_controls(columns)
-        else:
-            self._sync_item_scale_steppers()
         self._sync_text_scale_stepper()
 
     def _field_title(self, header: str) -> str:
@@ -2022,61 +2020,19 @@ class CrelabelWindow(QMainWindow):
             if widget:
                 widget.deleteLater()
 
-    def _rebuild_text_item_controls(self, columns: list[tuple[str, str]]):
-        self._clear_box(self.text_items_box)
-        self.line_scale_steppers = []
-        visible = [(index, header) for index, (header, _value) in enumerate(columns) if index < MAX_TEXT_LINES]
-        if not visible:
-            hint = QLabel("选择标签内容后，这里会单独列出每一项文字的大小，例如编号和 L/R。")
-            hint.setObjectName("Hint")
-            hint.setWordWrap(True)
-            self.text_items_box.addWidget(hint)
-            return
-        for index, header in visible:
-            row = QHBoxLayout()
-            title = QLabel(f"{self._field_title(header)}大小")
-            title.setMinimumWidth(92)
-            stepper = NumberStepper(50, 220, 5, self.line_scales[index], 0, " %")
-            stepper.setToolTip(f"只改变「{self._field_title(header)}」，不影响其他文字")
-            stepper.valueChanged.connect(lambda value, item=index: self._on_item_scale(item, value))
-            row.addWidget(title)
-            row.addWidget(stepper, 1)
-            self.text_items_box.addLayout(row)
-            self.line_scale_steppers.append(stepper)
-
-    def _sync_item_scale_steppers(self):
-        for index, stepper in enumerate(self.line_scale_steppers):
-            if int(stepper.value()) != int(self.line_scales[index]):
-                stepper.blockSignals(True)
-                stepper.setValue(self.line_scales[index])
-                stepper.blockSignals(False)
-
-    def _on_item_scale(self, index: int, value: float):
-        self._freeze_elements_from_preview()
-        self.line_scales[index] = int(value)
-        if index == 0:
-            self.text_scale_step.blockSignals(True)
-            self.text_scale_step.setValue(value)
-            self.text_scale_step.blockSignals(False)
-        self.update_preview()
-
     def _sync_text_scale_stepper(self):
-        index = self._text_line_index(self.preview_element_combo.currentData())
-        if index is None:
-            return
-        self.text_scale_step.blockSignals(True)
-        self.text_scale_step.setValue(self.line_scales[index])
-        self.text_scale_step.blockSignals(False)
+        current = int(self.text_scale_step.value())
+        if self.line_scales and int(self.line_scales[0]) != current:
+            self.line_scales = [current] * MAX_TEXT_LINES
 
     def on_text_scale_changed(self, value: float):
-        self._freeze_elements_from_preview()
-        index = self._text_line_index(self.preview.selected_element)
-        if index is None:
-            index = self._text_line_index(self.preview_element_combo.currentData())
-        if index is None:
-            index = 0
-        self.line_scales[index] = int(value)
-        self._sync_item_scale_steppers()
+        unified = int(value)
+        self.line_scales = [unified] * MAX_TEXT_LINES
+        self.update_preview()
+
+    def on_text_alignment_changed(self, *_args):
+        self.element_abs = {name: xy for name, xy in self.element_abs.items() if not str(name).startswith("text")}
+        self.line_x = [0.0] * MAX_TEXT_LINES
         self.update_preview()
 
     def preview_element_changed(self, index: int):
@@ -2158,8 +2114,7 @@ class CrelabelWindow(QMainWindow):
         line_index = self._text_line_index(element)
         if line_index is not None:
             delta = (dx_ratio + dy_ratio) * 60
-            next_scale = max(50, min(220, self.line_scales[line_index] + delta))
-            self.line_scales[line_index] = int(next_scale)
+            next_scale = max(50, min(220, int(self.text_scale_step.value()) + delta))
             self.text_scale_step.setValue(next_scale)
             return
         if element == "barcode":

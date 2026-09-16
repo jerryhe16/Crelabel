@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from crelabel import CUSTOM_OPTION, NO_PRINT_OPTION, STYLE, CrelabelWindow
 from feishu_client import CONFIG_URL_PROGRESS, REQUIRED_SCOPES, FeishuError, _extract_json, cli_config_dir, cli_runtime, complete_user_auth, configure_and_begin_auth, environment_status, load_feishu_data, run_cli, validate_feishu_url
-from label_core import CONTENT_FIELD_SLOTS, LabelLayout, LabelRecord, LabelSettings, auto_mapping, bundled_font_path, bundled_logo_path, clean, format_label_value, image_to_zpl, load_local_rows, make_logo, make_qr, records_from_rows, render_label, render_label_with_regions, zebra_calibration_zpl
+from label_core import CONTENT_FIELD_SLOTS, LabelLayout, LabelRecord, LabelSettings, auto_mapping, bundled_font_path, bundled_logo_path, clean, explicit_break_parts, format_label_value, image_to_zpl, load_local_rows, make_logo, make_qr, records_from_rows, render_label, render_label_with_regions, zebra_calibration_zpl
 
 
 def isolated_ink_ratio(image) -> float:
@@ -112,10 +112,10 @@ def main():
     assert abs(hand_regions["text_1"][1] - hand_regions["text_0"][1]) < 24
     scaled_hand, scaled_regions = render_label_with_regions(
         record, [("样机编号", "Gen3 V2-001"), ("左右手", "左手")], settings,
-        layout=LabelLayout(show_barcode=False, line_scale_percent=(100, 160, 100, 100, 100)),
+        layout=LabelLayout(show_barcode=False, text_scale_percent=160),
     )
     assert scaled_regions["text_1"][3] - scaled_regions["text_1"][1] > hand_regions["text_1"][3] - hand_regions["text_1"][1]
-    assert abs((scaled_regions["text_0"][2] - scaled_regions["text_0"][0]) - (hand_regions["text_0"][2] - hand_regions["text_0"][0])) < 8
+    assert scaled_regions["text_0"][2] - scaled_regions["text_0"][0] > hand_regions["text_0"][2] - hand_regions["text_0"][0]
     dpm = settings.dots_per_mm
     pinned = (
         ("text_0", hand_regions["text_0"][0] / dpm, hand_regions["text_0"][1] / dpm),
@@ -123,7 +123,7 @@ def main():
     )
     _pinned_label, pinned_regions = render_label_with_regions(
         record, [("样机编号", "Gen3 V2-001"), ("左右手", "左手")], settings,
-        layout=LabelLayout(show_barcode=False, line_scale_percent=(160, 100, 100, 100, 100), element_abs_mm=pinned),
+        layout=LabelLayout(show_barcode=False, text_scale_percent=160, element_abs_mm=pinned),
     )
     assert pinned_regions["text_1"][0] == hand_regions["text_1"][0]
     assert pinned_regions["text_1"][1] == hand_regions["text_1"][1]
@@ -142,6 +142,17 @@ def main():
     _center_image, center_regions = render_label_with_regions(record, short_columns, settings, layout=LabelLayout(text_alignment="center"))
     _right_image, right_regions = render_label_with_regions(record, short_columns, settings, layout=LabelLayout(text_alignment="right"))
     assert left_regions["text_0"][0] < center_regions["text_0"][0] < right_regions["text_0"][0]
+    long_spec = "AXLE, Φ1.5MM x 7.9 HIGH STRENGTH STEEL SHAFT FOR FF-CR"
+    squeezed, squeezed_regions = render_label_with_regions(
+        record, [("零件", "钢轴"), ("规格描述", long_spec)], settings, layout=LabelLayout(show_barcode=False, show_qr=False),
+    )
+    wrapped_height = squeezed_regions["text_1"][3] - squeezed_regions["text_1"][1]
+    assert wrapped_height > squeezed_regions["text_0"][3] - squeezed_regions["text_0"][1]
+    broken, broken_regions = render_label_with_regions(
+        record, [("规格描述", "第一行\\n第二行")], settings, layout=LabelLayout(show_barcode=False, show_qr=False),
+    )
+    assert broken_regions["text_0"][3] - broken_regions["text_0"][1] > squeezed_regions["text_0"][3] - squeezed_regions["text_0"][1]
+    assert explicit_break_parts("第一行\\n第二行") == ["第一行", "第二行"]
     assert b"^MTT" in image_to_zpl(label, "thermal_transfer")
     assert b"^MTD" in image_to_zpl(label, "direct_thermal")
     assert b"^MNY" in image_to_zpl(label, "thermal_transfer", "gap")
@@ -302,8 +313,14 @@ def main():
     assert abs(window.qr_size_step.value() - original_qr) < 0.05
     assert "验证模板 30x20" in [window.template_combo.itemText(i) for i in range(window.template_combo.count())]
     assert [window.print_method_combo.itemText(i) for i in range(window.print_method_combo.count())] == ["热转印（碳带）", "热敏（无碳带）"]
+    assert not window.text_scale_step.isHidden()
     window.text_alignment_combo.setCurrentIndex(window.text_alignment_combo.findData("right"))
     assert window.label_layout().text_alignment == "right"
+    right_x = window.preview.source_regions["text_0"][0]
+    window.move_preview_element("text_0", 0.04, 0.0)
+    window.text_alignment_combo.setCurrentIndex(window.text_alignment_combo.findData("left"))
+    assert window.preview.source_regions["text_0"][0] < right_x
+    window.text_alignment_combo.setCurrentIndex(window.text_alignment_combo.findData("center"))
     window.width_spin.setValue(60)
     window.height_spin.setValue(40)
     window.sync_preset_to_size()
@@ -319,13 +336,12 @@ def main():
     assert window.preview.source_regions["text_0"][0] < right_edge_x
     if "text_1" in window.preview.source_regions:
         first_width = window.preview.source_regions["text_0"][2] - window.preview.source_regions["text_0"][0]
-        window.preview.set_selected_element("text_1")
-        window.line_scales[1] = 160
-        window.update_preview()
-        second_width = window.preview.source_regions["text_1"][2] - window.preview.source_regions["text_1"][0]
-        assert second_width > 0
-        window.line_scales[1] = 100
-        window.update_preview()
+        window.text_scale_step.setValue(160)
+        assert window.label_layout().text_scale_percent == 160
+        assert set(window.label_layout().line_scale_percent) == {160}
+        grown = window.preview.source_regions["text_0"][2] - window.preview.source_regions["text_0"][0]
+        assert grown >= first_width
+        window.text_scale_step.setValue(100)
     window.offset_x_step.setValue(1.5)
     window.text_scale_step.setValue(130)
     window.preset_combo.setCurrentText("30 × 20 mm")
