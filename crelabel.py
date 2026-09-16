@@ -1208,14 +1208,6 @@ class CrelabelWindow(QMainWindow):
         self._apply_type_logo_default(self.label_type.currentIndex())
         alignment_index = self.text_alignment_combo.findData(saved_layout.get("text_alignment", "center"))
         self.text_alignment_combo.setCurrentIndex(alignment_index if alignment_index >= 0 else 1)
-        if "show_barcode" in saved_layout:
-            self.barcode_check.blockSignals(True)
-            self.barcode_check.setChecked(bool(saved_layout["show_barcode"]))
-            self.barcode_check.blockSignals(False)
-        if "show_qr" in saved_layout:
-            self.qr_check.blockSignals(True)
-            self.qr_check.setChecked(bool(saved_layout["show_qr"]))
-            self.qr_check.blockSignals(False)
         self.update_date_controls()
         self.sync_preset_to_size()
         self._refresh_template_combo()
@@ -1439,7 +1431,7 @@ class CrelabelWindow(QMainWindow):
         if not self.barcode_header and defaults:
             self.barcode_header = defaults[0]
         self.update_barcode_hint()
-        self.barcode_scale_step.setEnabled(not machine)
+        self._sync_code_controls()
         self.populate_table()
         try:
             self.update_preview()
@@ -1569,11 +1561,11 @@ class CrelabelWindow(QMainWindow):
             self._updating_columns = False
 
     def update_barcode_hint(self):
-        if self.label_type.currentIndex() == 1:
-            self.barcode_hint.setText("条形码：整机不打印 · 二维码：飞书记录链接")
-            return
-        text = self.barcode_header or "未识别，请选择"
-        self.barcode_hint.setText(f"条形码：{text} · 二维码：飞书记录链接")
+        barcode = self.barcode_header or "未识别"
+        if not self.barcode_check.isChecked():
+            barcode = "不打印"
+        qr = "飞书记录链接" if self.qr_check.isChecked() else "不打印"
+        self.barcode_hint.setText(f"条形码：{barcode} · 二维码：{qr}")
 
     def barcode_value(self, record: LabelRecord) -> str:
         value = clean(record.raw_fields.get(self.barcode_header, "")) if self.barcode_header else ""
@@ -1638,10 +1630,12 @@ class CrelabelWindow(QMainWindow):
 
     def on_barcode_toggled(self, checked: bool):
         self._sync_code_controls()
+        self.update_barcode_hint()
         self.update_preview()
 
     def on_qr_toggled(self, checked: bool):
         self._sync_code_controls()
+        self.update_barcode_hint()
         self.update_preview()
 
     def _sync_code_controls(self):
@@ -1730,6 +1724,9 @@ class CrelabelWindow(QMainWindow):
             "line_x": self.line_x[:],
             "line_y": self.line_y[:],
             "show_logo": self.logo_check.isChecked(),
+            "show_barcode": self.barcode_check.isChecked(),
+            "show_qr": self.qr_check.isChecked(),
+            "date_mode": self.date_mode.currentIndex(),
             "layout": {
                 "offset_x_mm": self.offset_x_step.value(),
                 "offset_y_mm": self.offset_y_step.value(),
@@ -1749,17 +1746,134 @@ class CrelabelWindow(QMainWindow):
             },
         }
 
-    def save_default_layout(self):
-        self._freeze_elements_from_preview()
-        index = str(self.label_type.currentIndex())
-        if index == "-1":
-            QMessageBox.information(self, APP_NAME, "请先选择物料标签或整机标签，再保存默认布局。")
+    def _type_template_key(self) -> str:
+        index = self.label_type.currentIndex()
+        return str(index if index in (0, 1) else 0)
+
+    def _migrate_layout_templates(self):
+        templates = self.config_data.setdefault("layout_templates", {})
+        active = self.config_data.setdefault("active_template", {})
+        saved = self.config_data.get("saved_layouts", {})
+        if not isinstance(templates, dict):
+            templates = {}
+            self.config_data["layout_templates"] = templates
+        for key, snapshot in saved.items():
+            bucket = templates.setdefault(str(key), [])
+            if not isinstance(bucket, list):
+                bucket = []
+                templates[str(key)] = bucket
+            if bucket or not isinstance(snapshot, dict):
+                continue
+            named = dict(snapshot)
+            named["name"] = "默认布局"
+            bucket.append(named)
+            active.setdefault(str(key), "默认布局")
+
+    def _templates_for_type(self, type_key: str | None = None) -> list[dict]:
+        key = type_key or self._type_template_key()
+        bucket = self.config_data.setdefault("layout_templates", {}).setdefault(key, [])
+        if not isinstance(bucket, list):
+            bucket = []
+            self.config_data["layout_templates"][key] = bucket
+        return bucket
+
+    def _find_template(self, name: str, type_key: str | None = None) -> dict | None:
+        needle = clean(name)
+        for item in self._templates_for_type(type_key):
+            if clean(item.get("name", "")) == needle:
+                return item
+        return None
+
+    def _refresh_template_combo(self, selected_name: str | None = None):
+        if not hasattr(self, "template_combo"):
             return
-        layouts = self.config_data.setdefault("saved_layouts", {})
-        layouts[index] = self._layout_snapshot()
+        key = self._type_template_key()
+        names = [clean(item.get("name", "")) for item in self._templates_for_type(key) if clean(item.get("name", ""))]
+        current = selected_name or self.config_data.get("active_template", {}).get(key, "")
+        self._updating_templates = True
+        try:
+            self.template_combo.clear()
+            self.template_combo.addItem("未选择模板")
+            for name in names:
+                self.template_combo.addItem(name)
+            target = current if current in names else "未选择模板"
+            self.template_combo.setCurrentText(target)
+        finally:
+            self._updating_templates = False
+
+    def on_template_selected(self, _index: int = 0):
+        if self._updating_templates:
+            return
+        name = self.template_combo.currentText()
+        if not name or name == "未选择模板":
+            return
+        self._apply_named_template(name)
+
+    def save_named_template(self):
+        if self.label_type.currentIndex() not in (0, 1):
+            QMessageBox.information(self, APP_NAME, "请先选择物料标签或整机标签，再保存模板。")
+            return
+        kind = "物料" if self.label_type.currentIndex() == 0 else "整机"
+        suggested = self.template_combo.currentText()
+        if not suggested or suggested == "未选择模板":
+            suggested = f"{kind} {int(self.width_spin.value())}×{int(self.height_spin.value())}"
+        name, ok = QInputDialog.getText(self, "保存模板", "模板名称：", text=suggested)
+        if not ok:
+            return
+        stored = self._store_template(name)
+        if stored:
+            QMessageBox.information(self, APP_NAME, f"已保存模板“{stored}”。可在下拉框中随时切换。")
+
+    def _store_template(self, name: str) -> str:
+        name = clean(name)
+        if not name or name == "未选择模板":
+            QMessageBox.information(self, APP_NAME, "请输入模板名称。")
+            return ""
+        self._freeze_elements_from_preview()
+        snapshot = self._layout_snapshot()
+        snapshot["name"] = name
+        bucket = self._templates_for_type()
+        for index, item in enumerate(bucket):
+            if clean(item.get("name", "")) == name:
+                bucket[index] = snapshot
+                break
+        else:
+            bucket.append(snapshot)
+        self.config_data.setdefault("active_template", {})[self._type_template_key()] = name
+        self.config_data.setdefault("saved_layouts", {})[self._type_template_key()] = snapshot
+        self._refresh_template_combo(name)
         self._save_config()
-        self.status.setText("已保存为当前标签类型的默认布局")
-        QMessageBox.information(self, APP_NAME, "当前排版已保存为默认布局。之后可用“恢复默认”回到这一版，避免误拖后对不齐。")
+        self.status.setText(f"已保存模板：{name}")
+        return name
+
+    def delete_named_template(self):
+        name = self.template_combo.currentText()
+        if not name or name == "未选择模板":
+            QMessageBox.information(self, APP_NAME, "请先选择要删除的命名模板。")
+            return
+        if QMessageBox.question(self, APP_NAME, f"删除模板“{name}”？此操作不可恢复。") != QMessageBox.StandardButton.Yes:
+            return
+        key = self._type_template_key()
+        bucket = self._templates_for_type(key)
+        self.config_data["layout_templates"][key] = [item for item in bucket if clean(item.get("name", "")) != name]
+        active = self.config_data.setdefault("active_template", {})
+        if active.get(key) == name:
+            active[key] = ""
+        self._refresh_template_combo("未选择模板")
+        self._save_config()
+        self.status.setText(f"已删除模板：{name}")
+
+    def _apply_named_template(self, name: str, record_active: bool = True) -> bool:
+        saved = self._find_template(name)
+        if not saved:
+            return False
+        try:
+            self._apply_layout_snapshot(saved)
+        except Exception:
+            return False
+        if record_active:
+            self.config_data.setdefault("active_template", {})[self._type_template_key()] = name
+        return True
 
     def _apply_layout_snapshot(self, saved: dict):
         layout = saved.get("layout", saved)
@@ -1795,23 +1909,36 @@ class CrelabelWindow(QMainWindow):
             self.logo_check.blockSignals(True)
             self.logo_check.setChecked(bool(saved["show_logo"]))
             self.logo_check.blockSignals(False)
-            self.logo_size_step.setEnabled(self.logo_check.isChecked())
-            self.logo_size_label.setEnabled(self.logo_check.isChecked())
+        if "show_barcode" in saved:
+            self.barcode_check.blockSignals(True)
+            self.barcode_check.setChecked(bool(saved["show_barcode"]))
+            self.barcode_check.blockSignals(False)
+        if "show_qr" in saved:
+            self.qr_check.blockSignals(True)
+            self.qr_check.setChecked(bool(saved["show_qr"]))
+            self.qr_check.blockSignals(False)
+        if "date_mode" in saved and self.date_mode.isEnabled():
+            self.date_mode.setCurrentIndex(int(saved["date_mode"]))
+        self._sync_code_controls()
         self.sync_preset_to_size()
         self.update_preview()
 
     def reset_label_layout(self):
-        saved = self.config_data.get("saved_layouts", {}).get(str(self.label_type.currentIndex()))
-        if saved:
-            self._apply_layout_snapshot(saved)
-            self.status.setText("已恢复为保存的默认布局")
-            return
         self.offset_x_step.setValue(0)
         self.offset_y_step.setValue(0)
         self.reset_content_layout()
+        self._refresh_template_combo("未选择模板")
+        self.status.setText("已恢复为当前纸张尺寸的出厂排版")
+
+    def _factory_graphic_defaults(self) -> dict[str, float]:
+        height = float(self.height_spin.value())
+        if height <= 20:
+            return {"qr_size_mm": 7.0, "barcode_scale": 80, "text_spacing_mm": 0.1, "logo_width_mm": 8.0}
+        return {"qr_size_mm": 9.5, "barcode_scale": 100, "text_spacing_mm": 0.2, "logo_width_mm": 10.0}
 
     def reset_content_layout(self):
         """Restore responsive content defaults while preserving printer alignment offsets."""
+        defaults = self._factory_graphic_defaults()
         self.element_abs = {}
         self.line_scales = [100] * MAX_TEXT_LINES
         self.line_x = [0.0] * MAX_TEXT_LINES
@@ -1819,11 +1946,11 @@ class CrelabelWindow(QMainWindow):
         self.text_scale_step.blockSignals(True)
         self.text_scale_step.setValue(100)
         self.text_scale_step.blockSignals(False)
-        self.text_spacing_step.setValue(0.2)
-        self.barcode_scale_step.setValue(100)
-        self.sync_barcode_scale(100)
-        self.qr_size_step.setValue(9.5)
-        self.logo_size_step.setValue(10.0)
+        self.text_spacing_step.setValue(defaults["text_spacing_mm"])
+        self.barcode_scale_step.setValue(defaults["barcode_scale"])
+        self.sync_barcode_scale(defaults["barcode_scale"])
+        self.qr_size_step.setValue(defaults["qr_size_mm"])
+        self.logo_size_step.setValue(defaults["logo_width_mm"])
         self.text_alignment_combo.setCurrentIndex(1)
         for widget in (
             self.text_x_step, self.text_y_step, self.barcode_x_step,
@@ -2114,12 +2241,16 @@ class CrelabelWindow(QMainWindow):
         for index, combo in enumerate(self.column_combos):
             combo.setVisible(not compact or index == 0)
         self.niimbot_symbol.setVisible(compact)
-        self.date_mode.setEnabled(not compact)
-        self.date_edit.setEnabled(not compact)
-        for control in (self.offset_x_step, self.offset_y_step, self.text_scale_step, self.text_spacing_step, self.text_alignment_combo, self.qr_size_step, self.barcode_scale_step, self.logo_check, self.logo_size_step, self.preview_element_combo):
+        for control in (
+            self.offset_x_step, self.offset_y_step, self.text_scale_step, self.text_spacing_step,
+            self.text_alignment_combo, self.qr_size_step, self.barcode_scale_step,
+            self.logo_check, self.barcode_check, self.qr_check, self.logo_size_step,
+            self.preview_element_combo,
+        ):
             control.setEnabled(not compact)
+        self._sync_date_controls_visibility()
         if not compact:
-            self.on_logo_toggled(self.logo_check.isChecked())
+            self._sync_code_controls()
         self.preview.setEnabled(not compact)
         if "niimbot" in name.lower() or "精臣" in name:
             self.print_method_combo.setCurrentIndex(1)

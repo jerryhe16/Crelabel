@@ -57,6 +57,15 @@ Start-Process release\Crelabel_v0.8.12\Crelabel.exe --self-test -Wait -PassThru
 
 ## 最近交接记录
 
+### 2026-09-16 / Codex / 并发改动保护
+
+- 目标：Git 基线提交后发现 `crelabel.py` 出现一组不属于仓库初始化任务的并发源码改动，避免覆盖或丢失。
+- 分支：`codex/preserve-concurrent-layout`。
+- 内容：命名布局模板、条码/二维码显示开关及相关界面逻辑；来源待确认，暂不合并到 `main`。
+- 验证：`py_compile` 通过；`verify_machine_ui.py` 通过；`verify_crelabel.py` 失败，报错为 `column_combos[4]` 越界，因此当前状态仅为 WIP，不是可发布版本。
+- 下一步：由接手者核对这组改动是否为 Grok 正在开发的功能，并修复/更新核心回归后再申请合并。
+- 发布：未构建安装包，未上传飞书，未修改飞书简介。
+
 ### 2026-09-16 / Codex / Git 基线
 
 - 目标：建立 Codex 与 Grok 可审查、可回滚的本地 Git 协作基线。
