@@ -5,6 +5,8 @@
 当前负责人：无  
 发布状态：本地安装包已存在；是否被用户实机确认、是否应上传飞书，需要重新确认。
 
+Git 状态：本地仓库，默认分支 `main`，源码基线提交 `ccd4e9a`；未配置远程仓库。
+
 ## 当前结论
 
 当前源码可以继续维护，核心回归和整机 UI 验证可运行，但历史说明存在版本漂移。后续只以本文件、`AGENTS.md` 和当前源码为准；`GROK_QA_TASK.md`、`grok-qa-transcript.md` 与 v0.8.2/v0.8.3 验证目录属于历史证据，不代表当前发布状态。
@@ -54,6 +56,15 @@ Start-Process release\Crelabel_v0.8.12\Crelabel.exe --self-test -Wait -PassThru
 5. 项目已建立本地 Git 仓库，`main` 保存稳定基线；目前没有配置远程仓库。后续功能使用 `codex/*` 或 `grok/*` 分支，并按 `AGENTS.md` 交接和审查。
 
 ## 最近交接记录
+
+### 2026-09-16 / Codex / Git 基线
+
+- 目标：建立 Codex 与 Grok 可审查、可回滚的本地 Git 协作基线。
+- 修改：新增 `.gitignore`、`.gitattributes`，并在 `AGENTS.md` 增加分支与 worktree 规则。
+- 基线：`main` 的源码基线提交为 `ccd4e9a`（`chore: establish Crelabel source baseline`）。
+- 排除项：构建目录、安装包、第三方可执行文件、验证输出、本机缓存、数据库和可能包含授权信息的本地文件。
+- 远程：未配置；未经用户指定平台和目标，不推送代码。
+- 发布：未改软件功能，未构建新版本，未上传飞书，未修改飞书简介。
 
 ### 2026-09-16 / Codex
 
