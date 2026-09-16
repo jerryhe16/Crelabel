@@ -177,7 +177,9 @@ def main():
     app = QApplication.instance() or QApplication([])
     app.setStyleSheet(STYLE)
     save_patch = patch.object(CrelabelWindow, "_save_config")
+    load_patch = patch.object(CrelabelWindow, "_load_config", return_value={})
     save_patch.start()
+    load_patch.start()
     window = CrelabelWindow()
     headers, rows, title = load_local_rows(str(ROOT / "sample.csv"))
     window.apply_rows(headers, rows, title)
@@ -346,6 +348,7 @@ def main():
     window.grab().save(str(ROOT / "crelabel-ui-final.png"))
     window.close()
     save_patch.stop()
+    load_patch.stop()
 
     with patch.object(CrelabelWindow, "_load_config", return_value={"printer": "Adobe PDF"}), patch.object(CrelabelWindow, "_save_config"), patch("crelabel.list_printers", return_value=["Adobe PDF", "ZDesigner ZD888-300dpi ZPL"]):
         printer_window = CrelabelWindow()

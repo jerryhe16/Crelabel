@@ -1,27 +1,47 @@
 # Crelabel 当前接管说明
 
 更新日期：2026-09-16  
-当前源码版本：0.8.13（用户确认以 Grok 当前最新版为准）  
+当前源码版本：0.8.13  
 当前负责人：无  
-发布状态：0.8.13 仅为源码状态，尚未构建、实机确认或发布；历史 0.8.12 安装包仍保留在本地。
+发布状态：`实机验证通过`（用户确认当前版本可用，作为后续开发主线）；`安装包已构建`；**不是** `已发布`（未上传飞书、未配置 GitHub 远程）。
 
-Git 状态：本地仓库，默认分支 `main`，Grok 0.8.13 源码基线提交 `500c49d`；未配置远程仓库。
+当前工作：无。下一项功能开始前必须在此登记负责人、目标、分支和预计修改文件。
+
+Git 状态：本地仓库，默认分支 `main`。0.8.13 源码基线为 `500c49d`，说明文档基线见本分支提交。未配置远程仓库。
 
 ## 当前结论
 
-当前权威源码是 Grok 完成的 0.8.13。用户已明确要求后续以 Grok 当前最新版为准；后续只以本文件、`AGENTS.md` 和当前源码为准。`GROK_QA_TASK.md`、`grok-qa-transcript.md` 与 v0.8.2/v0.8.3 验证目录属于历史证据，不代表当前发布状态。
+- **主线就是当前 `main` 上的 0.8.13。** 用户已确认该版本验证通过，后续功能从这条线继续，不要再把 `9f9dd93` 当作待合并 WIP。
+- `9f9dd93`（布局模板 / 条码与二维码勾选 / 四字段）是 Grok 当时的并发改动；`500c49d` 已带上修复后的 `verify_crelabel.py`（不再访问 `column_combos[4]`）。`codex/preserve-concurrent-layout` 现已与 `main` 同指向 `ec622cd`，**不要再合并一次**。
+- 「质检留样」是用户本机配置里的自定义内容，不是产品默认文案。用户已明确不用改。
+- 后续 Codex 与 Grok 必须按 `AGENTS.md` 分分支、必要时用 worktree，禁止直接在 `main` 上开功能。
+- 用户计划以后把仓库上传 GitHub，再交给其他代理维护。在用户给出远程地址并明确允许推送之前，**不添加 remote、不 push、不改 GitHub 简介**。
+- 权威入口只有 `AGENTS.md`、本文件和当前源码。`GROK_QA_TASK.md`、`grok-qa-transcript.md` 与 v0.8.2/v0.8.3 验证目录是历史证据。
 
-## 当前功能基线
+## 当前功能基线（0.8.13）
 
 - 两种业务入口：物料标签、整机标签。
 - 飞书多维表格直连、扫码授权、本机缓存、Excel/CSV 导入。
-- 物料标签：最多 5 个文字字段、自定义文字、Code128、记录二维码、日期。
-- 整机标签：样机编号、L/R、记录二维码，可显示 Prime Hand Logo；编号和 L/R 可独立拖动缩放。
-- Zebra ZD888TA：300 dpi RAW ZPL、热转印/热敏、间隙/黑标/连续纸、校准、队列检查修复。
+- 物料标签：左侧 4 个文字字段 + 日期（不打印 / 今天 / 指定日期）；可勾选打印 Logo / 条形码 / 二维码；自定义文字；Code128；飞书记录二维码。
+- 整机标签：样机编号、L/R、记录二维码，默认可显示 Prime Hand Logo；缺完整编号、左右手或记录链接时禁止打印。
+- 版式：预览可拖动缩放；可保存多个命名模板并切换；「恢复出厂」回到当前纸张的出厂排版。30×20 使用更紧的出厂默认值。
+- Zebra ZD888TA：300 dpi RAW ZPL、热转印 `^MTT` / 热敏 `^MTD`、间隙/黑标/连续纸、校准、队列检查修复。
 - 精臣 B1 Pro：Windows 驱动打印，一项文字加可选条形码或二维码，小尺寸自动排版。
-- 预览支持直接选择、拖动、缩放和按标签类型保存默认布局。
 
-## 2026-09-16 接管核验
+## 2026-09-16 用户确认主线
+
+用户决定：当前已验证版本可以成为主线；「质检留样」保持现状；后续只要 Codex 与 Grok 能共同开发即可。GitHub 上传由用户稍后安排，不在本次执行。
+
+已存在的 0.8.13 本地安装包（构建产物，不入库）：
+
+- `release/Crelabel-Setup-v0.8.13.exe`
+- 大小：66,908,234 bytes
+- SHA256：`639DD7CC0284756717F29861EB3FB9C3B64C4A5203FEEA505D9EDA92A68F2208`
+- 便携目录：`release/Crelabel_v0.8.13/Crelabel.exe`（`--self-test` 退出码 0）
+
+历史安装包 `release/Crelabel-Setup-v0.8.12.exe` 仍可留在本地，不再作为开发基线。
+
+## 2026-09-16 接管核验（历史，Codex 当时针对 0.8.12 源码/包）
 
 已执行：
 
@@ -29,33 +49,30 @@ Git 状态：本地仓库，默认分支 `main`，Grok 0.8.13 源码基线提交
 python -m py_compile crelabel.py label_core.py feishu_client.py compact_label.py windows_print.py tools\verify_crelabel.py tools\verify_machine_ui.py
 python tools\verify_crelabel.py
 python tools\verify_machine_ui.py
-Start-Process release\Crelabel_v0.8.12\Crelabel.exe --self-test -Wait -PassThru
 ```
 
-结果：
+当时结果：语法检查通过；核心回归通过；整机 UI 验证通过；飞书缓存固定 115 条附加断言被跳过。该核验不能替代用户对 0.8.13 的确认。
 
-- 语法检查通过。
-- 核心回归通过：40×30/300 dpi、Code128、二维码、飞书授权流程、热转印/热敏、介质识别和校准指令。
-- 整机 UI 验证通过：5 个完整样机编号、30×20/40×30、二维码解码、L/R、空选择和忙碌状态保护、两种窗口尺寸。
-- 打包程序自检退出码为 0。
-- `verify_crelabel.py` 的飞书缓存附加检查被跳过，原因是缓存内容与脚本中固定的 115 条断言不一致；核心测试没有因此失败，但该断言需要改为基于当前数据或独立 fixture。
-- `verify_machine_ui.py` 会覆盖 `outputs/v0.8.3-validation/results.json`，且旧《验证报告》仍写“通用映射 0/5”，当前结果已变成 5/5；该历史报告不能作为当前结论。
+## 当前未完成和下一步
 
-当前本地安装包：
+1. GitHub 远程尚未配置。用户准备好仓库地址后，再由用户或被明确授权的代理添加 remote 并推送 `main`。不要抢先创建 GitHub 仓库。
+2. 未上传飞书，未替换飞书附件或简介。
+3. README 正文仍是早期历史说明；同事使用以 `Crelabel-Quick-Guide.txt` 为准。发布到 GitHub 前可再整理 README，但不要把历史说明当成当前规范。
+4. Zebra 打印速度/浓度（`^PR` / `~SD`）仍是可选后续功能，需先定允许值与测试，且须用户点名后再做。
+5. `verify_crelabel.py` 末尾飞书缓存「115 条」断言仍可能被跳过，不影响核心回归。
 
-- `release/Crelabel-Setup-v0.8.12.exe`
-- 大小：66,898,158 bytes
-- SHA256：`5A28AE97744E02295E37B07E7B199EA046565C97F47E41F4C76AB0CF05458F81`
-
-## 当前未验证和下一步
-
-1. **实机打印未在本次接管中执行。** 需要斑马实际出纸、白色树脂碳带清晰度、位置、手机扫码和飞书权限检查。
-2. 用户当前反馈 ZD888TA 300 dpi 的最低速度是 76 mm/s，驱动界面曾显示“热感”；使用碳带时应为热转印。建议下一项开发是在 Crelabel 中加入 Zebra 打印速度和浓度，并直接输出 `^PR` / `~SD`，避免 RAW ZPL 与驱动首选项不一致。
-3. 在实现速度/浓度前，应先确定该机型允许值、默认值、配置是否随任务保存，并增加 ZPL 单元测试；不要先构建或上传。
-4. README、`同事使用说明-Crelabel.txt`、`飞书直连环境说明.txt` 仍含旧版本描述，发布下一版前应统一更新，但不要把历史文件当作当前功能规范。
-5. 项目已建立本地 Git 仓库，`main` 保存稳定基线；目前没有配置远程仓库。后续功能使用 `codex/*` 或 `grok/*` 分支，并按 `AGENTS.md` 交接和审查。
+下一位代理最先应该做：读 `AGENTS.md` 和本文件；确认「当前工作」为空；从 `main` 拉 `codex/<task>` 或 `grok/<task>` 分支；若与另一代理同时改代码，使用独立 worktree。
 
 ## 最近交接记录
+
+### 2026-09-16 / Grok / 记录已验证主线
+
+- 目标：按用户确认，把 0.8.13 记为后续共同开发主线；不改「质检留样」；不上传 GitHub。
+- 分支：`grok/record-verified-mainline`。
+- 修改：`HANDOFF.md`、`AGENTS.md`、`README.md` 入口提示、`tools/verify_crelabel.py`（测试改为不读取本机配置）。未改产品源码，未改版本号，未构建新安装包，未改「质检留样」。
+- 验证：`py_compile` 通过；`verify_crelabel.py` 核心回归通过（飞书缓存「115 条」附加断言仍 skipped）；`verify_machine_ui.py` 通过。测试曾因读取本机配置里关闭的条码/二维码勾选而失败，已改为空配置隔离。
+- 发布：未推送远程，未上传飞书。
+- 下一步：Codex 或其他代理可从 `main` 开新功能分支。GitHub 等用户给出地址。
 
 ### 2026-09-16 / Grok 最新版确认为基线
 
@@ -63,15 +80,14 @@ Start-Process release\Crelabel_v0.8.12\Crelabel.exe --self-test -Wait -PassThru
 - 当前源码：0.8.13；涉及 `crelabel.py`、`tools/verify_crelabel.py`、`build.ps1`、`Crelabel.iss` 和 `Crelabel-Quick-Guide.txt`。
 - 自动验证：语法检查、`verify_crelabel.py`、`verify_machine_ui.py` 均通过；飞书缓存固定 115 条附加断言仍被跳过。
 - Git：这套源码进入 `main` 后即为权威开发基线；此前“来源待确认”的说明被本条结论取代。
-- 发布：尚未构建 0.8.13 安装包，尚未实机验证，未上传飞书，未修改飞书简介。
+- 发布：当时文档仍写尚未构建 0.8.13；其后已构建安装包，并由用户确认为主线（见上条）。
 
 ### 2026-09-16 / Codex / 并发改动保护（已由后续结论取代）
 
 - 目标：Git 基线提交后发现 `crelabel.py` 出现一组不属于仓库初始化任务的并发源码改动，避免覆盖或丢失。
 - 分支：`codex/preserve-concurrent-layout`。
-- 内容：命名布局模板、条码/二维码显示开关及相关界面逻辑；当时来源待确认，后续用户已确认这是 Grok 最新版。
-- 验证：`py_compile` 通过；`verify_machine_ui.py` 通过；`verify_crelabel.py` 失败，报错为 `column_combos[4]` 越界，因此当前状态仅为 WIP，不是可发布版本。
-- 下一步：由接手者核对这组改动是否为 Grok 正在开发的功能，并修复/更新核心回归后再申请合并。
+- 内容：命名布局模板、条码/二维码显示开关及相关界面逻辑；当时来源待确认，后续用户已确认这是 Grok 最新版，并已进入 `main`。
+- 验证：当时 `verify_crelabel.py` 因 `column_combos[4]` 越界失败；`500c49d` 已修复，不必再合并该 WIP 提交。
 - 发布：未构建安装包，未上传飞书，未修改飞书简介。
 
 ### 2026-09-16 / Codex / Git 基线
@@ -87,6 +103,5 @@ Start-Process release\Crelabel_v0.8.12\Crelabel.exe --self-test -Wait -PassThru
 
 - 目标：审核 Grok 留下的接管描述并建立双方可持续协作方式。
 - 修改：新增 `AGENTS.md` 与 `HANDOFF.md`；将旧 Grok 任务和 README 标记为历史入口。
-- 验证：见上方“2026-09-16 接管核验”。
+- 验证：见上方历史接管核验。
 - 发布：未构建新版本，未上传飞书，未修改飞书简介。
-- 下一步：先由用户确认是否开发“Zebra 速度/浓度”控制；接手代理须先登记当前工作。

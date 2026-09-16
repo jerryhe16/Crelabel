@@ -1,6 +1,6 @@
 # Crelabel
 
-> 开发者/代理接手前必须先阅读 [`AGENTS.md`](AGENTS.md) 和 [`HANDOFF.md`](HANDOFF.md)。下面内容是早期功能说明，可能落后于当前 0.8.12 源码；同事使用以 `Crelabel-Quick-Guide.txt` 为准。
+> 开发者/代理接手前必须先阅读 [`AGENTS.md`](AGENTS.md) 和 [`HANDOFF.md`](HANDOFF.md)。当前主线是 0.8.13。下面正文是早期功能说明，可能落后于源码；同事使用以 `Crelabel-Quick-Guide.txt` 为准。
 
 # 飞书 Excel 标签打印助手（历史说明）
 
