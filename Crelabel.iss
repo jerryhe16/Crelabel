@@ -1,5 +1,5 @@
 #define MyAppName "Crelabel"
-#define MyAppVersion "0.8.13"
+#define MyAppVersion "0.8.14"
 #define MyAppPublisher "Prime Hand"
 #define MyAppExeName "Crelabel.exe"
 
