@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $OutputDir = Join-Path $ProjectDir "dist"
-$ReleaseDir = Join-Path $ProjectDir "release\Crelabel_v0.8.12"
+$ReleaseDir = Join-Path $ProjectDir "release\Crelabel_v0.8.13"
 $InstallerDir = Join-Path $ProjectDir "release"
 
 Set-Location -LiteralPath $ProjectDir

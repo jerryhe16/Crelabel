@@ -1279,6 +1279,8 @@ class CrelabelWindow(QMainWindow):
             self.label_type.setCurrentIndex(index)
             self.label_type.blockSignals(False)
             self._apply_type_logo_default(index)
+            self._sync_date_controls_visibility()
+            self.update_barcode_hint()
             self._refresh_template_combo()
             if previous != index:
                 applied = False

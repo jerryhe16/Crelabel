@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from crelabel import CUSTOM_OPTION, NO_PRINT_OPTION, STYLE, CrelabelWindow
 from feishu_client import CONFIG_URL_PROGRESS, REQUIRED_SCOPES, FeishuError, _extract_json, cli_config_dir, cli_runtime, complete_user_auth, configure_and_begin_auth, environment_status, load_feishu_data, run_cli, validate_feishu_url
-from label_core import LabelLayout, LabelRecord, LabelSettings, auto_mapping, bundled_font_path, bundled_logo_path, clean, format_label_value, image_to_zpl, load_local_rows, make_logo, make_qr, records_from_rows, render_label, render_label_with_regions, zebra_calibration_zpl
+from label_core import CONTENT_FIELD_SLOTS, LabelLayout, LabelRecord, LabelSettings, auto_mapping, bundled_font_path, bundled_logo_path, clean, format_label_value, image_to_zpl, load_local_rows, make_logo, make_qr, records_from_rows, render_label, render_label_with_regions, zebra_calibration_zpl
 
 
 def isolated_ink_ratio(image) -> float:
@@ -196,16 +196,19 @@ def main():
     window.column_combos[2].setCurrentText(first_header)
     assert window.column_combos[2].currentText() == NO_PRINT_OPTION
     assert first_header != second_header
-    window.column_combos[3].setCurrentIndex(window.column_combos[3].findText(CUSTOM_OPTION))
-    assert window.column_combos[3].isEditable()
-    window.column_combos[3].setEditText("质检留样")
-    assert window.column_combos[3].currentText() == "质检留样"
+    window.column_combos[2].setCurrentIndex(window.column_combos[2].findText(CUSTOM_OPTION))
+    assert window.column_combos[2].isEditable()
+    window.column_combos[2].setEditText("质检留样")
+    assert window.column_combos[2].currentText() == "质检留样"
     assert ("", "质检留样") in window.selected_columns(window.records[0])
-    window.column_combos[4].setCurrentIndex(window.column_combos[4].findText(CUSTOM_OPTION))
-    window.column_combos[4].setEditText("A区货架")
+    window.column_combos[3].setCurrentIndex(window.column_combos[3].findText(CUSTOM_OPTION))
+    window.column_combos[3].setEditText("A区货架")
+    assert window.logical_column_selection(2) == CUSTOM_OPTION
     assert window.logical_column_selection(3) == CUSTOM_OPTION
-    assert window.logical_column_selection(4) == CUSTOM_OPTION
     assert ("", "A区货架") in window.selected_columns(window.records[0])
+    assert len(window.column_combos) == CONTENT_FIELD_SLOTS
+    assert window.date_mode.parent() is window.date_controls
+    assert window.date_controls.parent() is not None
     custom_text_label = render_label(window.records[0], window.selected_columns(window.records[0]), settings)
     assert custom_text_label.size == label.size
     window.width_spin.setValue(40)
@@ -259,6 +262,43 @@ def main():
     assert after_logo[2] - after_logo[0] > before_logo[2] - before_logo[0]
     window.logo_check.setChecked(False)
     assert "logo" not in window.preview.source_regions
+    assert window.barcode_check.isChecked() and window.qr_check.isChecked()
+    window.barcode_check.setChecked(False)
+    assert "barcode" not in window.preview.source_regions
+    window.qr_check.setChecked(False)
+    assert "qr" not in window.preview.source_regions
+    window.barcode_check.setChecked(True)
+    window.qr_check.setChecked(True)
+    assert {"barcode", "qr"}.issubset(window.preview.source_regions)
+    hidden_codes, hidden_regions = render_label_with_regions(
+        record, list(record.raw_fields.items()), settings, layout=LabelLayout(show_barcode=False, show_qr=False),
+    )
+    assert "barcode" not in hidden_regions and "qr" not in hidden_regions
+    packed_30, packed_regions = render_label_with_regions(
+        window.records[0], window.selected_columns(window.records[0]), LabelSettings(30, 20, 300),
+        window.printed_date(), LabelLayout(show_barcode=True, show_qr=True, qr_size_mm=7.0, barcode_height_mm=5.4),
+        window.barcode_value(window.records[0]),
+    )
+    assert packed_30.size == LabelSettings(30, 20, 300).pixel_size
+    if "text_0" in packed_regions and "barcode" in packed_regions:
+        assert packed_regions["barcode"][3] <= packed_30.size[1]
+    if "text_0" in packed_regions and "qr" in packed_regions:
+        assert packed_regions["qr"][3] <= packed_30.size[1]
+    compact_30, _compact_regions = render_label_with_regions(
+        window.records[0], window.selected_columns(window.records[0])[:2], LabelSettings(30, 20, 300),
+        "", LabelLayout(show_barcode=True, show_qr=True, qr_size_mm=7.0, barcode_height_mm=5.4),
+        window.barcode_value(window.records[0]),
+    )
+    compact_decoded = {(item.format.name, item.text) for item in zxingcpp.read_barcodes(compact_30.convert("L"))}
+    assert ("Code128", window.barcode_value(window.records[0])) in compact_decoded, compact_decoded
+    assert ("QRCode", window.records[0].link) in compact_decoded, compact_decoded
+    original_qr = window.qr_size_step.value()
+    stored = window._store_template("验证模板 30x20")
+    assert stored == "验证模板 30x20"
+    window.qr_size_step.setValue(14)
+    assert window._apply_named_template("验证模板 30x20")
+    assert abs(window.qr_size_step.value() - original_qr) < 0.05
+    assert "验证模板 30x20" in [window.template_combo.itemText(i) for i in range(window.template_combo.count())]
     assert [window.print_method_combo.itemText(i) for i in range(window.print_method_combo.count())] == ["热转印（碳带）", "热敏（无碳带）"]
     window.text_alignment_combo.setCurrentIndex(window.text_alignment_combo.findData("right"))
     assert window.label_layout().text_alignment == "right"
