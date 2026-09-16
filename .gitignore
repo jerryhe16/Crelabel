@@ -1,0 +1,48 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Generated build and release artifacts
+build/
+dist/
+release/
+*.spec
+*.exe
+*.msi
+*.zip
+*.zpl
+*.log
+
+# Runtime output, local caches, and private data
+outputs/
+tmp/
+.cache/
+.lark/
+.env
+.env.*
+!.env.example
+*.local.json
+*.cache.json
+*.db
+*.sqlite
+*.sqlite3
+machine-live.json
+研发管理_打印数据包.json
+
+# Generated screenshots in the project root (assets/ remains tracked)
+/*.png
+/*.jpg
+/*.jpeg
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+

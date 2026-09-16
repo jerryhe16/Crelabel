@@ -1,0 +1,4 @@
+料号,零件,版本,批次号,SN,记录链接,打印数量,固件版本
+100006-B02,掌部结构件,B,L260827-01,,https://ncn5zs910x3g.feishu.cn/record/CRmlrpBQae3EeAcJpM7cBb6rnqE,2,
+PCB-MAIN-001,主控PCB,A,L260827-02,PCB260827001,https://example.com/record/pcb-001,1,FW1.3.2
+PH-G3V2-R-0001,Prime Hand Gen3V2 右手,C,,PH2608270001,https://example.com/record/hand-001,1,FW2.0.0

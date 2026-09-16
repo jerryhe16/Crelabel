@@ -1,0 +1,18 @@
+Crelabel Third-Party Notices
+============================
+
+Crelabel includes open-source runtime components, including PySide6/Qt for Python,
+Pillow, openpyxl, python-barcode, qrcode, pywin32 and PyInstaller bootloader code.
+Their respective licenses and copyright notices continue to apply.
+
+Crelabel includes the official Lark/Feishu CLI Windows runtime, version 1.0.67,
+licensed under the MIT License by Lark Technologies Pte. Ltd. A copy of its
+license is installed in runtime\LARK_CLI_LICENSE.txt.
+
+PySide6 and Qt are used under the LGPL terms published by The Qt Company / Qt Project.
+Source and license information: https://doc.qt.io/qtforpython-6/licenses.html
+
+Zebra, ZDesigner and related names are trademarks of Zebra Technologies Corp.
+Zebra printer drivers are not owned by Crelabel. An unmodified Zebra installer is
+not included in this package unless the deploying organization supplies an approved
+internal copy. Crelabel otherwise opens Zebra's official download and EULA flow.
