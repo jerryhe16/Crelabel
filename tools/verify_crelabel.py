@@ -71,10 +71,10 @@ def main():
             assert configure_and_begin_auth(config_events.append) == fake_auth_payload
     assert any(item.startswith(CONFIG_URL_PROGRESS + "https://open.feishu.cn/") for item in config_events)
     assert set(REQUIRED_SCOPES) == {"base:field:read", "base:record:read", "base:table:read", "base:view:read", "wiki:node:retrieve"}
-    with patch("feishu_client.is_cli_configured", return_value=True), patch("feishu_client.run_cli", side_effect=[{"verified": True, "userName": "测试用户"}, {"granted": list(REQUIRED_SCOPES), "missing": None}]):
+    with patch("feishu_client.cli_runtime", return_value=test_cli), patch("feishu_client.is_cli_configured", return_value=True), patch("feishu_client.run_cli", side_effect=[{"verified": True, "userName": "测试用户"}, {"granted": list(REQUIRED_SCOPES), "missing": None}]):
         checked = environment_status()
         assert checked["scope_ready"] is True and checked["missing_scopes"] == []
-    with patch("feishu_client.is_cli_configured", return_value=True), patch("feishu_client.run_cli", side_effect=[{"verified": True}, {"granted": [], "missing": ["wiki:node:retrieve"]}]):
+    with patch("feishu_client.cli_runtime", return_value=test_cli), patch("feishu_client.is_cli_configured", return_value=True), patch("feishu_client.run_cli", side_effect=[{"verified": True}, {"granted": [], "missing": ["wiki:node:retrieve"]}]):
         checked = environment_status()
         assert checked["scope_ready"] is False and checked["missing_scopes"] == ["wiki:node:retrieve"]
     with patch("feishu_client.run_cli", side_effect=[{"authorized": True}, {"granted": list(REQUIRED_SCOPES), "missing": None}]):
