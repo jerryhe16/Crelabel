@@ -10,8 +10,8 @@
 - GitHub：`https://github.com/zerodemary/Crelabel`
 - 默认分支：`main`
 - 飞书发布文档：`https://ncn5zs910x3g.feishu.cn/wiki/R8oYwCCP0iRENSkmnmMcqGPGngh`
-- 飞书文档版本：revision 386
-- 飞书附件：`Crelabel_v0.8.15_portable_publish.zip`
+- 飞书文档版本：revision 390
+- 飞书附件：`Crelabel_v0.8.15_portable.zip`
 - 附件大小：66,933,467 bytes
 - SHA256：`06386822652401B6134BE99ECB0C980BD03D42B0C48486558907D87C3278185A`
 
