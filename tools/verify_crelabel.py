@@ -65,7 +65,8 @@ def main():
         wait=lambda: 0,
     )
     fake_auth_payload = {"device_code": "device-test", "verification_url": "https://example.com/auth"}
-    with patch("feishu_client.is_cli_configured", side_effect=[False, True]), patch("feishu_client.subprocess.Popen", return_value=fake_config_process), patch("feishu_client.begin_user_auth", return_value=fake_auth_payload):
+    test_cli = str(bundled_cli or (ROOT / "fake-lark-cli.exe"))
+    with patch("feishu_client.cli_runtime", return_value=test_cli), patch("feishu_client.is_cli_configured", side_effect=[False, True]), patch("feishu_client.subprocess.Popen", return_value=fake_config_process), patch("feishu_client.begin_user_auth", return_value=fake_auth_payload):
         with patch("feishu_client.migrate_existing_app_config", return_value=False):
             assert configure_and_begin_auth(config_events.append) == fake_auth_payload
     assert any(item.startswith(CONFIG_URL_PROGRESS + "https://open.feishu.cn/") for item in config_events)
