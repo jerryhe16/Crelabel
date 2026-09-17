@@ -1,12 +1,11 @@
 $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $OutputDir = Join-Path $ProjectDir "dist"
-$ReleaseDir = Join-Path $ProjectDir "release\Crelabel_v0.8.14"
+$ReleaseDir = Join-Path $ProjectDir "release\Crelabel_v0.8.15"
 $InstallerDir = Join-Path $ProjectDir "release"
 
 Set-Location -LiteralPath $ProjectDir
 python -m PyInstaller --noconfirm --clean --onefile --windowed --name "Crelabel" --icon "crelabel.ico" `
-    --add-data "fonts/led_board-7.ttf;fonts" `
     --add-data "assets/prime-logo.png;assets" `
     --add-data "assets/prime-logo.svg;assets" `
     --exclude-module numpy `
@@ -20,10 +19,11 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed --name "Crelabel"
 
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $ReleaseDir "drivers") -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $ProjectDir "drivers\NiimbotPrinterDriverInstaller-3.0.2.1.exe") -Destination (Join-Path $ReleaseDir "drivers") -Force
+$NiimbotDriver = Join-Path $ProjectDir "drivers\NiimbotPrinterDriverInstaller-3.0.2.1.exe"
+if (Test-Path -LiteralPath $NiimbotDriver) {
+    Copy-Item -LiteralPath $NiimbotDriver -Destination (Join-Path $ReleaseDir "drivers") -Force
+}
 Copy-Item -LiteralPath (Join-Path $OutputDir "Crelabel.exe") -Destination (Join-Path $ReleaseDir "Crelabel.exe") -Force
-New-Item -ItemType Directory -Path (Join-Path $ReleaseDir "fonts") -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $ProjectDir "fonts\led_board-7.ttf") -Destination (Join-Path $ReleaseDir "fonts") -Force
 New-Item -ItemType Directory -Path (Join-Path $ReleaseDir "assets") -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $ProjectDir "assets\prime-logo.png") -Destination (Join-Path $ReleaseDir "assets") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectDir "assets\prime-logo.svg") -Destination (Join-Path $ReleaseDir "assets") -Force

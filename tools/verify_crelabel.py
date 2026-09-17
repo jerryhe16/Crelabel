@@ -93,7 +93,6 @@ def main():
     assert isolated_ink_ratio(text_crop) < 0.02, isolated_ink_ratio(text_crop)
     assert region_label.size == label.size
     assert {"text_0", "text_1", "barcode", "qr"}.issubset(regions)
-    assert bundled_font_path() is not None and bundled_font_path().name == "led_board-7.ttf"
     assert bundled_logo_path() is not None and bundled_logo_path().name == "prime-logo.png"
     logo = make_logo(120)
     assert logo is not None and logo.size[0] == 120 and logo.size[1] > 8

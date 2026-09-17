@@ -1,5 +1,5 @@
 #define MyAppName "Crelabel"
-#define MyAppVersion "0.8.14"
+#define MyAppVersion "0.8.15"
 #define MyAppPublisher "Prime Hand"
 #define MyAppExeName "Crelabel.exe"
 
@@ -27,8 +27,7 @@ CloseApplications=yes
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "快捷方式："; Flags: unchecked
 
 [Files]
-Source: "drivers\NiimbotPrinterDriverInstaller-3.0.2.1.exe"; DestDir: "{app}\drivers"; Flags: ignoreversion
-Source: "fonts\led_board-7.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+Source: "drivers\NiimbotPrinterDriverInstaller-3.0.2.1.exe"; DestDir: "{app}\drivers"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "assets\prime-logo.png"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "assets\prime-logo.svg"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "dist\Crelabel.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -48,5 +47,4 @@ Filename: "{app}\{#MyAppExeName}"; Description: "启动 Crelabel"; Flags: nowait
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\drivers"
 Type: filesandordirs; Name: "{app}\runtime"
-Type: filesandordirs; Name: "{app}\fonts"
 Type: filesandordirs; Name: "{app}\assets"

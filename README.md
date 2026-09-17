@@ -1,55 +1,58 @@
 # Crelabel
 
-> 开发者/代理接手前必须先阅读 [`AGENTS.md`](AGENTS.md) 和 [`HANDOFF.md`](HANDOFF.md)。当前主线是 0.8.14。下面正文是早期功能说明，可能落后于源码；同事使用以 `Crelabel-Quick-Guide.txt` 为准。
+Crelabel 是面向 Prime Hand 小批量研发和生产现场的 Windows 标签打印工具。它可以读取飞书多维表格、Excel 或 CSV，将物料和整机记录生成可预览、可调整、可扫码追溯的标签。
 
-# 飞书 Excel 标签打印助手（历史说明）
+当前版本：**0.8.15**
 
-面向飞书多维表格导出的 Excel 或飞书打印数据包，将每一行转换成斑马打印机可直接打印的标签。同事电脑不需要安装 Python，只需要安装斑马打印机驱动。
+## 主要能力
 
-## 已支持
+- 物料标签：最多 4 个文字字段加日期，可选 Code128、飞书记录二维码和自定义文字。
+- 整机标签：样机编号、L/R、详情二维码和可选 Logo；缺少关键数据时阻止打印。
+- 飞书直连：使用同事本人扫码授权读取 Base/Wiki，不回写在线表格。
+- Zebra ZD888TA：300 dpi RAW ZPL，支持热转印/热敏、间隙/黑标/连续纸、走纸校准和队列修复。
+- 精臣 B1 Pro：通过 Windows 驱动打印，一项文字加可选条形码或二维码，小尺寸自动排版。
+- 标签设计：实时预览、拖动缩放、统一字号、自动换行、文字对齐和命名模板。
 
-- `.xlsx`、`.xlsm`、`.csv` 文件。
-- 自动读取第一个工作表的 `零件、料号、供应商` 三列。
-- 自动跳过“四指BOM、拇指BOM”等分组标题行。
-- 固定使用 300 dpi、40×30 mm 零件标签。
-- 标签只显示零件、料号、供应商三项信息。
-- Code128 使用料号生成，方便扫码枪识别。
-- 可以从导入表中选择最多五列显示在标签上，并选择需要打印的行。
-- 如果导入表包含“记录分享链接”列，会为每行生成独立二维码，手机扫码直接打开对应飞书记录。
-- 可以直接在软件中粘贴飞书数据表/视图链接；软件通过同事本人授权的 lark-cli 读取记录，并在内存中获取逐行分享链接，不修改飞书原表。
-- Excel、CSV 和离线飞书打印数据包仍可继续导入。
-- 中文标签整张栅格化，不依赖打印机内置中文字体。
-- 选中打印、全部打印、固定打印份数。
-- 直接发送 RAW ZPL 到 Windows 打印机，或导出 `.zpl` 文件测试。
+## 开发环境
 
-## 使用流程
+要求 Windows 10/11、Python 3.11+。安装依赖后运行：
 
-1. 安装斑马打印机 Windows 驱动并连接打印机。
-2. 双击 `飞书Excel标签打印助手.exe`。
-3. 选择飞书导出的 Excel。
-4. 软件自动显示数据；在“标签显示列”中选择最多五列。
-5. 在左侧选择要打印的行，再选择打印机和每种打印份数。
-6. 先选中一行打印一张。
-7. 用扫码枪扫描条码、手机扫描二维码，确认无误后批量打印。
+```powershell
+python -m pip install -r requirements.txt
+python crelabel.py
+```
 
-## 固定 Excel 列
+运行核心检查：
 
-| 推荐列名 | 用途 |
-|---|---|
-| 零件 | 中文零件名称 |
-| 料号 | 标签文字和 Code128 |
-| 供应商 | 供应商名称 |
-| 记录分享链接 | 不显示为文字，只生成二维码 |
+```powershell
+python -m py_compile crelabel.py label_core.py feishu_client.py compact_label.py windows_print.py tools\verify_crelabel.py
+python tools\verify_crelabel.py
+```
 
-## 安全约定
+`tools/verify_machine_ui.py` 使用未提交的本机飞书测试数据，只适合维护者在配置完成的机器上运行。
 
-- 打印全部前会二次确认。
-- 重打不会自动生成新 PN、SN 或 LOT，只重复打印 Excel 中的原编码。
-- 打印后务必扫描首张核对。
-- 软件不会回写或修改原 Excel 文件。
+## 构建说明
 
-## 当前限制
+`build.ps1` 会调用 PyInstaller 和 Inno Setup。由于第三方授权限制，仓库不包含以下二进制文件：
 
-- 只支持斑马可识别的 ZPL 打印语言；不适用于仅支持普通 Windows 图形打印的标签机。
-- 标签尺寸目前固定为 40×30 mm，后续可按实际标签纸调整。
-- Excel 中的图片、合并单元格样式不参与标签生成，只读取单元格数据。
+- `vendor/lark-cli/lark-cli.exe`：从飞书/Lark 官方渠道获取后放入该目录。
+- `drivers/NiimbotPrinterDriverInstaller-3.0.2.1.exe`：可选，仅在确认允许内部再分发后放入 `drivers/`。
+- `drivers/ZebraDriverSetup.exe`：可选；必须自行确认 Zebra EULA，正常情况下由软件打开官方安装页面。
+
+应用文字默认使用 Windows 系统字体，仓库不捆绑来源或商用权限不明确的字体文件。
+
+## 协作方式
+
+开发者和代码代理开始工作前必须完整阅读 [AGENTS.md](AGENTS.md) 与 [HANDOFF.md](HANDOFF.md)。
+
+1. 从最新 `main` 创建 `codex/<task>` 或 `grok/<task>` 分支。
+2. 在 `HANDOFF.md` 登记负责人、目标和预计修改文件。
+3. 修改源码并补充验证。
+4. 提交 Pull Request，不直接向 `main` 推送功能提交。
+5. 安装包与飞书发布仍需用户实机确认。
+
+更多细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 开源许可
+
+代码以 [MIT License](LICENSE) 发布。Prime Hand、Crelabel 名称、Logo、图标及其他品牌资产不包含在 MIT 商标授权中，详见 [NOTICE.md](NOTICE.md)。第三方组件继续适用各自许可证，见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。

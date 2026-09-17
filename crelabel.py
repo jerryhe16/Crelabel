@@ -86,7 +86,7 @@ class QDoubleSpinBox(_QDoubleSpinBox):
 
 
 APP_NAME = "Crelabel"
-APP_VERSION = "0.8.14"
+APP_VERSION = "0.8.15"
 MACHINE_URL = "https://ncn5zs910x3g.feishu.cn/base/SsZVbzJLvaZRKAsHQn0cKh82nJh?table=tblk6TQzvZ0yJgeh&view=vew9VeGGN3"
 MACHINE_CODE_FIELDS = ("样机编号", "自动编号")
 MATERIAL_URL = "https://ncn5zs910x3g.feishu.cn/wiki/FUmMw16QLiZcODka0WYcp7nZn8b?table=tblFeazbWqYNoWOj"

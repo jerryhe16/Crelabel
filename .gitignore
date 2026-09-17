@@ -39,10 +39,14 @@ machine-live.json
 /*.jpg
 /*.jpeg
 
+# Locally supplied redistributables and fonts (license must be checked by the builder)
+fonts/*.ttf
+drivers/*.exe
+vendor/lark-cli/*.exe
+
 # Editor and operating-system files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 desktop.ini
-
