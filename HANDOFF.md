@@ -63,4 +63,4 @@
 - 本地产物：忽略目录 `outputs/source-layout-validation/` 下 1440×900 与 1120×720 界面截图；未构建安装包、未更新版本、未发送打印任务、未上传飞书。
 - 限制：共享视图链接仍需换用原始链接；权限不足须本人授权。此次没有用户提供的目标表，未进行真实飞书端到端连接；Zebra/精臣出纸和实物扫码未验证。
 - 下一步：审查本分支，在真实目标表连接、选择非连续行、拖动元素后试打一张并扫码。源码 PR 只提交 jerryhe16/Crelabel，不改上游 zerodemary/Crelabel。
-- 远端交付：本地提交已完成；尝试推送功能分支被自动审批拒绝（要求用户明确授权上传修改后的源码到 GitHub）。未推送、未创建 PR，等待用户确认后再推送本分支并创建 PR，不得绕过此审批。
+- 远端交付：用户于 2026-09-21 明确回复“推送吧”后，功能提交 `db72daf` 已推送至 `jerryhe16/Crelabel` 的 `codex/flexible-import-stable-layout` 分支；已创建 PR https://github.com/jerryhe16/Crelabel/pull/1 ，等待审查，未合并。
