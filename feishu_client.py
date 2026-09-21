@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 
 EXCLUDED_FIELD_TYPES = {"attachment", "link"}
@@ -48,6 +48,44 @@ def validate_feishu_url(url: str) -> None:
         raise FeishuError("请输入完整的飞书多维表格链接。")
     if "/share/base/view/" in parsed.path.lower():
         raise FeishuError(SHARED_VIEW_MESSAGE)
+    if not re.search(r"/(base|wiki|share/base/record)/[^/]+", parsed.path):
+        raise FeishuError("请粘贴飞书多维表格的 /base/ 或 /wiki/ 原始链接，或记录分享链接。")
+
+
+def table_url(url: str, table_id: str) -> str:
+    """Switch tables without carrying another table's view/record filters."""
+    parsed = urlparse(url.strip())
+    query = parse_qs(parsed.query)
+    for key in ("view", "record", "record_id"):
+        query.pop(key, None)
+    query["table"] = [table_id]
+    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+
+
+def discover_feishu_source(url: str, progress: Callable[[str], None] | None = None) -> dict:
+    validate_feishu_url(url)
+    notify = progress or (lambda _message: None)
+    notify("正在解析链接并读取数据表列表…")
+    resolved = run_cli("base", "+url-resolve", "--url", url.strip(), "--as", "user", "--format", "json")
+    base_token = resolved.get("base_token")
+    if not base_token:
+        raise FeishuError("该链接未指向多维表格，请复制原始多维表格链接。")
+    tables = run_cli("base", "+table-list", "--base-token", base_token,
+                     "--as", "user", "--format", "json").get("tables", [])
+    tables = [{"id": item.get("id") or item.get("table_id"),
+               "name": item.get("name") or item.get("title") or item.get("id") or item.get("table_id")}
+              for item in tables if item.get("id") or item.get("table_id")]
+    if not tables:
+        raise FeishuError("该多维表格没有可访问的数据表。")
+    query = parse_qs(urlparse(url).query)
+    selected = (query.get("table") or [resolved.get("table_id", "")])[0]
+    if selected and selected not in {item["id"] for item in tables}:
+        raise FeishuError("链接指定的数据表不存在或没有访问权限，请检查链接。")
+    # A root link with several tables must wait for the user's choice.
+    if not selected and len(tables) == 1:
+        selected = tables[0]["id"]
+    return {"source_url": url.strip(), "base_token": base_token, "tables": tables,
+            "table_id": selected, "title": resolved.get("title", "飞书多维表格")}
 
 
 def _extract_json(raw: str) -> dict:
@@ -324,11 +362,19 @@ def load_feishu_data(
     cached_base_token = previous.get("base_token", "")
     if cached_base_token:
         notify("正在复用已验证的飞书连接…")
-        resolved = {"base_token": cached_base_token, "title": previous.get("title", "飞书多维表格")}
+        resolved = {"base_token": cached_base_token, "title": previous.get("title", "飞书多维表格"),
+                    "table_id": previous.get("table_id", ""), "view_id": previous.get("view_id", "")}
     else:
         notify("首次连接：正在解析飞书链接…")
         resolved = run_cli("base", "+url-resolve", "--url", normalized_url, "--as", "user", "--format", "json")
-    base_token = resolved["base_token"]
+    base_token = resolved.get("base_token")
+    if not base_token:
+        raise FeishuError("该链接未指向多维表格，请复制原始多维表格链接。")
+    table_id = table_id or resolved.get("table_id", "")
+    # An explicit table without a view means all its records, especially after
+    # switching away from a wiki/record link's original table.
+    if "table" not in query:
+        view_id = view_id or resolved.get("view_id", "")
 
     if not table_id:
         if previous.get("table_id"):
@@ -361,6 +407,7 @@ def load_feishu_data(
         raise FeishuError("目标数据表没有可打印字段。")
 
     records: list[dict] = []
+    seen_record_ids: set[str] = set()
     offset = 0
     while True:
         notify(f"正在读取记录… 已读取 {len(records)} 条")
@@ -380,6 +427,9 @@ def load_feishu_data(
         if len(record_ids) != len(rows):
             raise FeishuError("飞书记录和记录ID数量不一致，请刷新重试。")
         for record_id, row in zip(record_ids, rows):
+            if not record_id or record_id in seen_record_ids or len(row) != len(fields):
+                raise FeishuError("飞书返回了重复或不完整的记录，已停止读取，请刷新重试。")
+            seen_record_ids.add(record_id)
             records.append({
                 "record_id": record_id,
                 "fields": dict(zip(fields, row)),
@@ -404,7 +454,7 @@ def load_feishu_data(
     def fetch_links(batch: list[str]) -> dict[str, str]:
         share_data = run_cli(
             "base", "+record-share-link-create", "--base-token", base_token,
-            "--table-id", table_id, "--record-ids", ",".join(batch),
+            "--table-id", table_id, "--record-id", ",".join(batch),
             "--as", "user", "--format", "json",
         )
         return share_data.get("record_share_links", {})

@@ -20,3 +20,4 @@ jobs:
       - run: python -m pip install -r requirements.txt zxing-cpp
       - run: python -m py_compile crelabel.py label_core.py feishu_client.py compact_label.py windows_print.py tools/verify_crelabel.py
       - run: python tools/verify_crelabel.py
+      - run: python tools/verify_source_layout.py
