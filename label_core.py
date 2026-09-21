@@ -497,7 +497,9 @@ def _render_label_with_regions(
             x = (start_x if start_x is not None else aligned_x(max(tw, 1))) + offset_x + round(extra_x * dpm)
             pieces.append((row_text, x, y, tw, th))
             y += th + text_spacing
-        origin_x, origin_y = pieces[0][1], pieces[0][2]
+        # Anchor the whole field, not its first line: wrapped centred text may
+        # have a wider second line. Otherwise each drag shifts it again.
+        origin_x, origin_y = min(item[1] for item in pieces), pieces[0][2]
         pinned_x, pinned_y = placed_xy(
             f"text_{index}", origin_x, origin_y,
             max(item[3] for item in pieces),
@@ -532,8 +534,6 @@ def _render_label_with_regions(
             and is_hand_field(prepared_fields[index + 1])
             and len(rows) == 1
             and len(prepared_fields[index + 1][1]) == 1
-            and f"text_{index}" not in abs_pos
-            and f"text_{index + 1}" not in abs_pos
         )
         if companion:
             _header2, rows2, font2, height2 = prepared_fields[index + 1]
@@ -545,13 +545,16 @@ def _render_label_with_regions(
             group_x = aligned_x(group_width)
             bound = place_field(index, rows, font, group_x, cursor_y + (group_height - line_height) // 2)
             bound2 = place_field(index + 1, rows2, font2, group_x + text_width + gap, cursor_y + (group_height - height2) // 2)
-            last_text_bottom = max(last_text_bottom, bound[3], bound2[3])
+            # Measure automatic flow independently of manually placed bounds.
+            # Moving text must not shrink QR/barcode images or reflow siblings.
+            last_text_bottom = max(last_text_bottom, cursor_y + group_height)
             cursor_y = last_text_bottom + text_spacing
             index += 2
             continue
         bound = place_field(index, rows, font, None, cursor_y)
-        last_text_bottom = max(last_text_bottom, bound[3])
-        cursor_y = bound[3] + text_spacing
+        field_height = sum(row[2] for row in rows) + text_spacing * (len(rows) - 1)
+        last_text_bottom = max(last_text_bottom, cursor_y + field_height)
+        cursor_y += field_height + text_spacing
         index += 1
     if "text_0" in regions:
         regions["text"] = regions["text_0"]

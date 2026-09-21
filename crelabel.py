@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
 )
 
-from feishu_client import CONFIG_URL_PROGRESS, FeishuError, complete_user_auth, configure_and_begin_auth, environment_status, load_feishu_data, validate_feishu_url
+from feishu_client import CONFIG_URL_PROGRESS, FeishuError, complete_user_auth, configure_and_begin_auth, discover_feishu_source, environment_status, load_feishu_data, table_url, validate_feishu_url
 from label_core import (
     LabelRecord,
     LabelLayout,
@@ -683,6 +683,7 @@ class CrelabelWindow(QMainWindow):
             profile["barcode_column"] = self.barcode_header
         payload = {
             "label_profiles": profiles,
+            "source_urls": self.config_data.get("source_urls", {}),
             "machine_url": self.config_data.get("machine_url") or MACHINE_URL,
             "niimbot_symbol": self.niimbot_symbol.currentData(),
             "feishu_url": self._persistable_feishu_url(),
@@ -801,6 +802,21 @@ class CrelabelWindow(QMainWindow):
         self.feishu_button.clicked.connect(lambda: self.load_feishu(True))
         source_row.addWidget(self.feishu_button)
         source_layout.addLayout(source_row)
+        link_row = QHBoxLayout()
+        self.feishu_url.setPlaceholderText("粘贴任意有权限的飞书多维表格 / Wiki 链接")
+        self.feishu_url.setClearButtonEnabled(True)
+        self.feishu_url.returnPressed.connect(self.connect_source)
+        link_row.addWidget(self.feishu_url, 1)
+        self.connect_button = QPushButton("连接链接")
+        self.connect_button.clicked.connect(self.connect_source)
+        link_row.addWidget(self.connect_button)
+        source_layout.addLayout(link_row)
+        self.source_table_combo = QComboBox()
+        self.source_table_combo.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.source_table_combo.setVisible(False)
+        self.source_table_combo.activated.connect(self.select_source_table)
+        source_layout.addWidget(self.source_table_combo)
+        self._source_info = {}
         source_actions = QHBoxLayout()
         source_actions.addStretch()
         self.source_hint = QLabel("未加载数据")
@@ -888,7 +904,7 @@ class CrelabelWindow(QMainWindow):
         self.table.verticalHeader().setVisible(False)
         self.table.itemSelectionChanged.connect(self.update_preview)
         self.table.cellDoubleClicked.connect(self.open_record_detail)
-        self.table.setToolTip("点击选择记录；双击打开该行的飞书详情")
+        self.table.setToolTip("点击选择记录；Ctrl 多选，Shift 连选；双击打开该行的飞书详情")
         table_layout.addWidget(self.table, 1)
         left_layout.addWidget(table_card, 1)
 
@@ -1163,7 +1179,7 @@ class CrelabelWindow(QMainWindow):
         self.update_action_state()
 
     def _apply_saved_settings(self):
-        self.feishu_url.setText("")
+        self.feishu_url.setText(self.config_data.get("feishu_url", ""))
         self.width_spin.setValue(float(self.config_data.get("width_mm", 40)))
         self.height_spin.setValue(float(self.config_data.get("height_mm", 30)))
         self.date_mode.setCurrentIndex(int(self.config_data.get("date_mode", 1)))
@@ -1224,6 +1240,9 @@ class CrelabelWindow(QMainWindow):
         self._busy = busy
         current = self.label_type.currentIndex()
         self.feishu_button.setDisabled(busy)
+        self.feishu_url.setDisabled(busy)
+        self.connect_button.setDisabled(busy)
+        self.source_table_combo.setDisabled(busy)
         self.label_type.blockSignals(True)
         self.label_type.setDisabled(busy)
         if current >= 0:
@@ -1296,8 +1315,10 @@ class CrelabelWindow(QMainWindow):
             self.preview.set_source_pixmap(None)
             self.barcode_header = ""
             self.update_action_state()
-            url = MATERIAL_URL if index == 0 else (self.config_data.get("machine_url") or MACHINE_URL)
+            url = self.config_data.get("source_urls", {}).get(str(index)) or (MATERIAL_URL if index == 0 else (self.config_data.get("machine_url") or MACHINE_URL))
             self.feishu_url.setText(url)
+            self._source_info = {}
+            self.source_table_combo.setVisible(False)
             if not url:
                 self.source_hint.setText("整机标签表格待配置：在顶部菜单填写链接")
                 return
@@ -1314,6 +1335,7 @@ class CrelabelWindow(QMainWindow):
                 self.handle_error(str(exc))
                 return
             self.config_data["machine_url"] = url.strip()
+            self.config_data.setdefault("source_urls", {})["1"] = url.strip()
             self._save_config()
             if self.label_type.currentIndex() == 1:
                 self.select_label_type(1)
@@ -1321,7 +1343,7 @@ class CrelabelWindow(QMainWindow):
     def load_feishu(self, force_refresh: bool):
         url = self.feishu_url.text().strip()
         if not url:
-            QMessageBox.information(self, APP_NAME, "请先选择标签类型；整机表格可在顶部菜单配置。")
+            QMessageBox.information(self, APP_NAME, "请粘贴飞书多维表格链接，然后点击连接链接。")
             return
         try:
             validate_feishu_url(url)
@@ -1329,6 +1351,9 @@ class CrelabelWindow(QMainWindow):
             self.source_hint.setText("链接类型不支持")
             self.feishu_url.setFocus()
             QMessageBox.warning(self, "请使用原始多维表格链接", str(exc))
+            return
+        if not self._source_info or url != self._source_info.get("loaded_url"):
+            self.connect_source()
             return
         self.set_busy(True, "正在连接飞书…")
         self.run_worker(
@@ -1338,6 +1363,73 @@ class CrelabelWindow(QMainWindow):
             with_progress=True,
             on_finished=self.feishu_loaded,
         )
+
+    def connect_source(self):
+        if getattr(self, "_busy", False):
+            return
+        url = self.feishu_url.text().strip()
+        try:
+            validate_feishu_url(url)
+        except FeishuError as exc:
+            QMessageBox.warning(self, "请使用原始多维表格链接", str(exc))
+            return
+        # No automatic network request to the legacy preset when choosing the
+        # default label mode for a newly pasted source.
+        if self.label_type.currentIndex() < 0:
+            self.label_type.blockSignals(True)
+            self.label_type.setCurrentIndex(0)
+            self.label_type.blockSignals(False)
+            self._apply_type_logo_default(0)
+        self.clear_source_records()
+        self._source_info = {}
+        self.source_table_combo.clear()
+        self.source_table_combo.setVisible(False)
+        self.set_busy(True, "正在连接飞书…")
+        self.run_worker(discover_feishu_source, url, with_progress=True,
+                        on_finished=self.source_discovered)
+
+    def clear_source_records(self):
+        self.records = []
+        self.raw_rows = []
+        self.headers = []
+        self.table.setRowCount(0)
+        self.barcode_header = ""
+        self.update_preview()
+        self.update_action_state()
+
+    def source_discovered(self, info: dict):
+        self._source_info = info
+        self.clear_source_records()
+        self.source_table_combo.blockSignals(True)
+        self.source_table_combo.clear()
+        self.source_table_combo.addItem("请选择数据表…", "")
+        for item in info["tables"]:
+            self.source_table_combo.addItem(item["name"], item["id"])
+        index = self.source_table_combo.findData(info.get("table_id"))
+        self.source_table_combo.setCurrentIndex(max(0, index))
+        self.source_table_combo.blockSignals(False)
+        self.source_table_combo.setVisible(True)
+        self.set_busy(False)
+        if index > 0:
+            # Preserve the pasted view on initial connection.
+            self._source_info["loaded_url"] = info["source_url"]
+            self.load_feishu(True)
+        else:
+            self.source_hint.setText(info["title"])
+            self.status.setText("已连接，请选择要读取的数据表")
+
+    def select_source_table(self, index: int):
+        table_id = self.source_table_combo.itemData(index)
+        if not self._source_info:
+            return
+        if not table_id:
+            self.clear_source_records()
+            return
+        url = table_url(self._source_info["source_url"], table_id)
+        self.clear_source_records()
+        self.feishu_url.setText(url)
+        self._source_info["loaded_url"] = url
+        self.load_feishu(True)
 
     def feishu_loaded(self, data: dict):
         try:
@@ -1350,6 +1442,8 @@ class CrelabelWindow(QMainWindow):
                 values["记录分享链接"] = item.get("record_share_link", "")
                 rows.append(values)
             self.apply_rows(headers, rows, data.get("title", "飞书多维表格"))
+            self.config_data.setdefault("source_urls", {})[str(self.label_type.currentIndex())] = self.feishu_url.text().strip()
+            self._save_config()
             mode = "本机缓存" if data.get("cache_hit") else "飞书在线"
             self.source_hint.setText(f"{data.get('title', '飞书多维表格')} · {mode}")
             self.status.setText(f"已通过{mode}读取 {len(self.records)} 条；二维码链接 {sum(bool(r.link) for r in self.records)} 条")
@@ -1377,7 +1471,7 @@ class CrelabelWindow(QMainWindow):
             self.mapping["link"] = "记录分享链接"
         self.records = records_from_rows(headers, rows, self.mapping)
         link_header = self.mapping.get("link", "")
-        available_headers = [header for header in headers if header != link_header]
+        available_headers = headers[:]
         priority_headers = []
         for field_name in ("name", "code"):
             header = self.mapping.get(field_name, "")
@@ -1390,7 +1484,7 @@ class CrelabelWindow(QMainWindow):
         choices = [NO_PRINT_OPTION, CUSTOM_OPTION] + self.display_headers
         defaults = [self.mapping.get("name", ""), self.mapping.get("code", ""), self.mapping.get("supplier", "")]
         defaults = [value for value in defaults if value in self.display_headers]
-        defaults += [header for header in self.display_headers if header not in defaults]
+        defaults += [header for header in self.display_headers if header not in defaults and header != link_header]
         if machine:
             machine_defaults = [header for header in (code_header, "左右手") if header in self.display_headers]
             defaults = machine_defaults + [header for header in self.display_headers if header not in machine_defaults]
